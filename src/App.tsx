@@ -16,6 +16,7 @@ import type {
   OnConnect,
   OnEdgesChange,
   OnNodesChange,
+  OnNodeDoubleClick,
   EdgeMouseHandler,
 } from 'reactflow'
 import { removeEdge } from './lib/removeEdge'
@@ -60,6 +61,8 @@ function App() {
   const [preview, setPreview] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [tablePreviewOpen, setTablePreviewOpen] = useState(false)
+  const [tablePreviewTableId, setTablePreviewTableId] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'help' | null>(null)
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -198,8 +201,18 @@ function App() {
   const onNodesChange: OnNodesChange = useCallback((changes) => setNodes((nds) => applyNodeChanges(changes, nds)), [])
   const onEdgesChange: OnEdgesChange = useCallback((changes) => setEdges((eds) => applyEdgeChanges(changes, eds)), [])
 
+  const openTablePreview = useCallback((tableId: string) => {
+    setTablePreviewTableId(tableId)
+    setTablePreviewOpen(true)
+  }, [])
+  const onNodeDoubleClick: OnNodeDoubleClick = useCallback((_, node) => {
+    openTablePreview(node.id)
+  }, [openTablePreview])
+
   const leadTable = useMemo(() => tables.find((t) => t.id === rootTableId), [tables, rootTableId])
   const leadRowCount = leadTable?.rows.length ?? 0
+
+  const tablePreviewTable = useMemo(() => tables.find((t) => t.id === tablePreviewTableId) ?? null, [tables, tablePreviewTableId])
 
   useEffect(() => {
     setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, isRoot: n.id === rootTableId } })))
@@ -654,6 +667,7 @@ function App() {
           onConnect={onConnect}
           onEdgeDoubleClick={onEdgeDoubleClick}
           onEdgeContextMenu={onEdgeContextMenu}
+          onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={onNodeContextMenu}
           fitView
           nodeTypes={nodeTypes}
@@ -688,6 +702,42 @@ function App() {
                 ) : (
                   <pre className="preview">{preview || 'No preview yet'}</pre>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tablePreviewOpen && tablePreviewTable && (
+          <div className="preview-modal" onClick={() => setTablePreviewOpen(false)}>
+            <div className="preview-modal__content preview-modal__content--wide" onClick={(e) => e.stopPropagation()}>
+              <div className="preview-modal__header">
+                <h3>Table: {tablePreviewTable.name}</h3>
+                <div className="preview-modal__actions">
+                  <button onClick={() => setTablePreviewOpen(false)}>Close</button>
+                </div>
+              </div>
+              <div className="preview-modal__body table-preview__body">
+                <div className="table-preview__meta">Rows: {tablePreviewTable.rows.length} · Columns: {tablePreviewTable.columns.length}</div>
+                <div className="table-preview__table-wrapper">
+                  <table className="table-preview__table">
+                    <thead>
+                      <tr>
+                        {tablePreviewTable.columns.map((c) => (
+                          <th key={c}>{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tablePreviewTable.rows.slice(0, 50).map((row, idx) => (
+                        <tr key={idx}>
+                          {tablePreviewTable.columns.map((c) => (
+                            <td key={c}>{String((row as any)[c] ?? '')}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -762,7 +812,9 @@ function App() {
         )}
         {contextMenu && contextMenu.type === 'table' && (
           <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
-            <h4>Parsing options</h4>
+            <h4>Table</h4>
+            <button onClick={() => { openTablePreview(contextMenu.tableId); closeContextMenu() }}>View Table</button>
+            <h5>Parsing options</h5>
             <label>
               Delimiter
               <select
