@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { ReactFlowProvider } from 'reactflow'
-import TableNode, { TableNodeData } from './TableNode'
+import { describe, it, expect } from 'vitest'
+import TableNode from './TableNode'
+import type { TableNodeData } from './TableNode'
 
 const table = {
   id: 't1',
@@ -14,7 +16,7 @@ describe('TableNode', () => {
   const renderNode = (data: TableNodeData) =>
     render(
       <ReactFlowProvider>
-        <TableNode id="n1" data={data} />
+        <TableNode {...({ id: 'n1', data } as any)} />
       </ReactFlowProvider>,
     )
 
