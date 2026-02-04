@@ -1,0 +1,11 @@
+version: '3.9'
+services:
+  app:
+    build:
+      context: .
+      args:
+        VITE_APP_VERSION: ${VITE_APP_VERSION:-0.0.0}
+    image: cosmologist:latest
+    ports:
+      - "8080:80"
+    restart: unless-stopped

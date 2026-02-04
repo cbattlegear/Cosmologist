@@ -1,0 +1,13 @@
+- [x] Verify that the copilot-instructions.md file in the .github directory is created.
+- [x] Clarify Project Requirements
+- [x] Scaffold the Project
+- [x] Customize the Project
+- [x] Install Required Extensions (none required)
+- [x] Compile the Project
+- [x] Create and Run Task
+- [x] Launch the Project (run `npm run dev` when ready)
+- [x] Ensure Documentation is Complete
+- [x] Add ability to set "root" of the document, which will be the table all other documents relate to
+- [x] Add ability to upload one document at a time instead of having to upload everything at once
+- [x] Add preview modal overlay (full-screen, close button)
+- [x] Add JSON tree viewer (collapsible nodes)
