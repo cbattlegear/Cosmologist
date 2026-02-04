@@ -16,7 +16,7 @@ import type {
   OnConnect,
   OnEdgesChange,
   OnNodesChange,
-  OnNodeDoubleClick,
+  NodeMouseHandler,
   EdgeMouseHandler,
 } from 'reactflow'
 import { removeEdge } from './lib/removeEdge'
@@ -205,7 +205,7 @@ function App() {
     setTablePreviewTableId(tableId)
     setTablePreviewOpen(true)
   }, [])
-  const onNodeDoubleClick: OnNodeDoubleClick = useCallback((_, node) => {
+  const onNodeDoubleClick: NodeMouseHandler = useCallback((_event, node) => {
     openTablePreview(node.id)
   }, [openTablePreview])
 
