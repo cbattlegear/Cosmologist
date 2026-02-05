@@ -1,0 +1,8 @@
+[x] Zip/gzip/tar input
+SQL Schema import with Faker data
+Schema Mapping/Pivots with Regex
+Embed related data/potentially recursive
+Rename columns and tables
+Allow for Document root vs Active Root
+Duplicate Projects
+Output all documents/tables

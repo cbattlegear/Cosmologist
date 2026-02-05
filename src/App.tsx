@@ -554,8 +554,8 @@ function App() {
         </div>
       </header>
 
-      <input ref={loadInputRef} type="file" multiple webkitdirectory="true" directory="true" style={{ display: 'none' }} onChange={handleFileInput} />
-      <input ref={addInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleAddFileInput} />
+      <input ref={loadInputRef} type="file" multiple webkitdirectory="true" directory="true" accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleFileInput} />
+      <input ref={addInputRef} type="file" multiple accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleAddFileInput} />
 
       <div className="app-body">
         <aside className="sidebar">
@@ -681,7 +681,7 @@ function App() {
           <div className="drag-overlay">
             <div className="drag-overlay__content">
               <h2>Drop to add tables</h2>
-              <p>Files will be added as new tables.</p>
+              <p>Files or archives will be added as new tables.</p>
             </div>
           </div>
         )}
@@ -787,6 +787,7 @@ function App() {
                 <ul>
                   <li>File → New/Open/Manage projects</li>
                   <li>Load Data → Load dataset(s) or Add file(s)</li>
+                  <li>Supports CSV, TSV, TXT, JSON, JSONL, ZIP, TAR, GZ/TGZ (nested archives).</li>
                   <li>Drag relations between tables to build hierarchy; right-click edges to set 1:1 or 1:*.</li>
                   <li>Select root table and row index, then Generate Preview or Download ZIP.</li>
                 </ul>
