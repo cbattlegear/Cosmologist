@@ -1,6 +1,6 @@
 import Papa from 'papaparse'
 import { unzipSync, gunzipSync } from 'fflate'
-import type { TableData, Row } from './types'
+import type { TableData, Row, ParseFileError } from './types'
 
 export function slugify(input: string) {
   return input
@@ -151,13 +151,18 @@ function isArchiveName(lower: string): boolean {
   return lower.endsWith('.zip') || lower.endsWith('.gz') || lower.endsWith('.tgz') || lower.endsWith('.tar') || lower.endsWith('.tar.gz')
 }
 
+function makeError(fileName: string | undefined, message: string, detail?: string, sourceType?: string): ParseFileError {
+  const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `err-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return { id, fileName, message, detail, sourceType }
+}
+
 export async function parseFiles(
   files: FileList | File[],
   options?: { usedIds?: Set<string> },
-): Promise<{ tables: TableData[]; errors: string[] }> {
+): Promise<{ tables: TableData[]; errors: ParseFileError[] }> {
   const queue: File[] = Array.from(files as any)
   const tables: TableData[] = []
-  const errors: string[] = []
+  const errors: ParseFileError[] = []
   const usedIds = options?.usedIds ?? new Set<string>()
 
   while (queue.length) {
@@ -169,10 +174,10 @@ export async function parseFiles(
         const bytes = new Uint8Array(await readArrayBuffer(file))
         try {
           const extracted = await expandArchive(name, bytes)
-          if (!extracted.length) errors.push(`No files extracted from archive: ${name}`)
+          if (!extracted.length) errors.push(makeError(name, `No files extracted from archive: ${name}`, 'Archive may be empty or contain unsupported entries'))
           queue.push(...extracted)
         } catch (err: any) {
-          errors.push(`Failed extracting ${name}: ${err?.message ?? err}`)
+          errors.push(makeError(name, `Failed extracting ${name}: ${err?.message ?? err}`, err?.stack ?? String(err)))
         }
         continue
       }
@@ -206,11 +211,11 @@ export async function parseFiles(
         sourceType = 'json'
       }
       else {
-        errors.push(`Unsupported file type: ${name}`)
+        errors.push(makeError(name, `Unsupported file type: ${name}`, 'Supported: csv, tsv, txt, json, jsonl, zip, tar, gz, tgz'))
         continue
       }
       if (!rows.length) {
-        errors.push(`No rows parsed for ${name}`)
+        errors.push(makeError(name, `No rows parsed for ${name}`, 'Parsed 0 rows. Check headers and delimiter; adjust parsing options (delimiter/skip rows).'))
         continue
       }
       const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
@@ -218,7 +223,7 @@ export async function parseFiles(
       const id = uniqueId(slugify(tableBase), usedIds)
       tables.push({ id, name: tableBase, fileName: name, columns, rows, sourceText, sourceType })
     } catch (e: any) {
-      errors.push(`Failed parsing ${name}: ${e?.message ?? e}`)
+      errors.push(makeError(name, `Failed parsing ${name}: ${e?.message ?? e}`, e?.stack ?? String(e)))
     }
   }
 

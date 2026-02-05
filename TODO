@@ -1,8 +1,9 @@
 [x] Zip/gzip/tar input
+[x] More in depth error reporting on file upload
+Rename columns and tables
 SQL Schema import with Faker data
 Schema Mapping/Pivots with Regex
 Embed related data/potentially recursive
-Rename columns and tables
 Allow for Document root vs Active Root
 Duplicate Projects
 Output all documents/tables

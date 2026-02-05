@@ -103,11 +103,90 @@
   color: #666;
 }
 
-.error-list {
-  color: #b00020;
+.error-panel {
+  border: 1px solid #f5bcbc;
+  background: #fff5f5;
+  border-radius: 8px;
+  padding: 0.6rem;
+}
+
+.error-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #a02020;
+  margin-bottom: 0.4rem;
+}
+
+.error-panel__clear {
+  border: none;
+  background: none;
+  color: #a02020;
+  cursor: pointer;
   font-size: 0.8rem;
-  margin: 0.5rem 0 0;
-  padding-left: 1.2rem;
+}
+
+.error-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.error-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #f2d9d9;
+  font-size: 0.8rem;
+  color: #a02020;
+}
+
+.error-item:last-child {
+  border-bottom: none;
+}
+
+.error-item__message {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.error-item__message:hover {
+  text-decoration: underline;
+}
+
+.error-item__dismiss {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.error-item__dismiss:hover {
+  color: #7a1515;
+}
+
+.error-detail {
+  max-height: 40vh;
+  overflow: auto;
+  background: #111;
+  color: #eee;
+  padding: 0.75rem;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
 }
 
 .controls select,

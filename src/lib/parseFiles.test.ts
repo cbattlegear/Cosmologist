@@ -116,7 +116,7 @@ describe('parseFiles', () => {
 
   it('reports unsupported extension', async () => {
     const { errors } = await parseFiles([fileFromString('bad.xyz', 'hello')])
-    expect(errors[0]).toMatch(/Unsupported/)
+    expect(errors[0].message).toMatch(/Unsupported/)
   })
 
   it('respects usedIds for uniqueness', async () => {
