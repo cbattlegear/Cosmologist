@@ -1,9 +1,9 @@
 # Cosmologist
 
-Visualize, relate, and export data from CSV/TSV/TXT/JSON/JSONL files as merged JSON documents. Delete tables to prune your model.
+Visualize, relate, and export data from CSV/TSV/TXT/JSON/JSONL files or archives (ZIP/TAR/TGZ, nested archives supported) as merged JSON documents. Delete tables to prune your model.
 
 ## ✨ Features
-- Upload multiple files (directory selection & drag/drop) or add files incrementally; metadata persists in LocalStorage, sources in IndexedDB; per-table parsing options (delimiter, skip rows)
+- Upload multiple files (directory selection & drag/drop) or add files incrementally; supports CSV/TSV/TXT/JSON/JSONL plus ZIP/TAR/GZ/TGZ archives (nested archives); metadata persists in LocalStorage, sources in IndexedDB; per-table parsing options (delimiter, skip rows)
 - Auto-infer table schemas (table name from filename, columns from headers/keys)
 - Canvas with column-level connectors (React Flow)
 - Delete tables and relationships
@@ -32,7 +32,7 @@ docker run -it --rm -p 8080:80 cosmologist
 
 Then open http://localhost:8080
 
-```## 🧭 Usage
+## 🧭 Usage
 1. Start the dev server (`npm run dev`).
 2. Upload files via drag/drop or directory picker, or add individual files.
 3. Create relationships by dragging column handles between tables.

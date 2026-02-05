@@ -27,7 +27,7 @@ import { buildJoinedDocument, toRelationshipEdges } from './lib/join'
 import { removeTable } from './lib/removeTable'
 import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, renameProject } from './lib/projects'
 import { rehydrateTables } from './lib/rehydrate'
-import type { TableData } from './lib/types'
+import type { TableData, ParseFileError } from './lib/types'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import TableNode, { type TableNodeData } from './components/TableNode'
@@ -42,7 +42,7 @@ function App() {
   const [tables, setTables] = useState<TableData[]>([])
   const [nodes, setNodes] = useState<Node<TableNodeData>[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
-  const [errors, setErrors] = useState<string[]>([])
+  const [errors, setErrors] = useState<ParseFileError[]>([])
   const [rootTableId, setRootTableId] = useState('')
   const [leadRowIndex, setLeadRowIndex] = useState(0)
   const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({})
@@ -62,6 +62,7 @@ function App() {
   const [previewData, setPreviewData] = useState<any>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [tablePreviewOpen, setTablePreviewOpen] = useState(false)
+  const [selectedError, setSelectedError] = useState<ParseFileError | null>(null)
   const [tablePreviewTableId, setTablePreviewTableId] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'help' | null>(null)
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
@@ -293,6 +294,20 @@ function App() {
   }, [])
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
+  const handleErrorDismiss = useCallback((id: string) => {
+    setErrors((prev) => prev.filter((e) => e.id !== id))
+    setSelectedError((prev) => (prev?.id === id ? null : prev))
+  }, [])
+
+  const handleErrorClick = useCallback((err: ParseFileError) => {
+    setSelectedError(err)
+  }, [])
+
+  const clearErrors = useCallback(() => {
+    setErrors([])
+    setSelectedError(null)
+  }, [])
 
   const handlePreview = useCallback(() => {
     if (!rootTableId || !tables.length) return
@@ -554,18 +569,29 @@ function App() {
         </div>
       </header>
 
-      <input ref={loadInputRef} type="file" multiple webkitdirectory="true" directory="true" style={{ display: 'none' }} onChange={handleFileInput} />
-      <input ref={addInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleAddFileInput} />
+      <input ref={loadInputRef} type="file" multiple webkitdirectory="true" directory="true" accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleFileInput} />
+      <input ref={addInputRef} type="file" multiple accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleAddFileInput} />
 
       <div className="app-body">
         <aside className="sidebar">
         {persistError && <div className="persist-error">{persistError}</div>}
-        {!!errors.length && (
-          <ul className="error-list">
-            {errors.map((err) => (
-              <li key={err}>{err}</li>
-            ))}
-          </ul>
+        {errors.length > 0 && (
+          <div className="error-panel">
+            <div className="error-panel__header">
+              <span>Errors</span>
+              <button className="error-panel__clear" onClick={clearErrors}>Clear all</button>
+            </div>
+            <ul className="error-list">
+              {errors.map((err) => (
+                <li key={err.id} className="error-item">
+                  <button className="error-item__message" onClick={() => handleErrorClick(err)}>
+                    {err.fileName ? `${err.fileName}: ` : ''}{err.message}
+                  </button>
+                  <button className="error-item__dismiss" onClick={() => handleErrorDismiss(err.id)} aria-label="Dismiss">×</button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <section className="tables-section">
@@ -681,7 +707,7 @@ function App() {
           <div className="drag-overlay">
             <div className="drag-overlay__content">
               <h2>Drop to add tables</h2>
-              <p>Files will be added as new tables.</p>
+              <p>Files or archives will be added as new tables.</p>
             </div>
           </div>
         )}
@@ -775,6 +801,21 @@ function App() {
           </div>
         )}
 
+        {selectedError && (
+          <div className="modal" onClick={() => setSelectedError(null)}>
+            <div className="modal__content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal__header">
+                <h3>Error{selectedError.fileName ? ` · ${selectedError.fileName}` : ''}</h3>
+                <button onClick={() => setSelectedError(null)}>Close</button>
+              </div>
+              <div className="modal__body">
+                <p>{selectedError.message}</p>
+                {selectedError.detail && <pre className="error-detail">{selectedError.detail}</pre>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {helpOpen && (
           <div className="modal" onClick={() => setHelpOpen(false)}>
             <div className="modal__content" onClick={(e) => e.stopPropagation()}>
@@ -787,6 +828,7 @@ function App() {
                 <ul>
                   <li>File → New/Open/Manage projects</li>
                   <li>Load Data → Load dataset(s) or Add file(s)</li>
+                  <li>Supports CSV, TSV, TXT, JSON, JSONL, ZIP, TAR, GZ/TGZ (nested archives).</li>
                   <li>Drag relations between tables to build hierarchy; right-click edges to set 1:1 or 1:*.</li>
                   <li>Select root table and row index, then Generate Preview or Download ZIP.</li>
                 </ul>

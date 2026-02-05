@@ -10,6 +10,14 @@ export interface TableData {
   sourceType?: string
 }
 
+export interface ParseFileError {
+  id: string
+  fileName?: string
+  message: string
+  detail?: string
+  sourceType?: string
+}
+
 export interface RelationshipEdge {
   sourceTableId: string
   targetTableId: string

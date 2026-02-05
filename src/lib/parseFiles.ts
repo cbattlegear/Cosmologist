@@ -1,5 +1,6 @@
 import Papa from 'papaparse'
-import type { TableData, Row } from './types'
+import { unzipSync, gunzipSync } from 'fflate'
+import type { TableData, Row, ParseFileError } from './types'
 
 export function slugify(input: string) {
   return input
@@ -24,6 +25,15 @@ export async function readText(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error)
     reader.onload = () => resolve(String(reader.result))
     reader.readAsText(file)
+  })
+}
+
+export async function readArrayBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error)
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.readAsArrayBuffer(file)
   })
 }
 
@@ -83,54 +93,129 @@ export function detectDelimiter(text: string): string {
   return counts[0]?.count > 0 ? counts[0].d : ','
 }
 
+function looksLikeTar(data: Uint8Array): boolean {
+  if (data.length < 512) return false
+  const ustar = String.fromCharCode(...data.slice(257, 257 + 5))
+  return ustar === 'ustar'
+}
+
+function untar(data: Uint8Array): { name: string; data: Uint8Array }[] {
+  const entries: { name: string; data: Uint8Array }[] = []
+  let offset = 0
+  while (offset + 512 <= data.length) {
+    const header = data.slice(offset, offset + 512)
+    if (header.every((b) => b === 0)) break
+    const name = String.fromCharCode(...header.slice(0, 100)).replace(/\0.*$/, '')
+    const sizeOctal = String.fromCharCode(...header.slice(124, 136)).replace(/\0.*$/, '').trim()
+    const size = parseInt(sizeOctal || '0', 8)
+    const contentStart = offset + 512
+    const contentEnd = contentStart + size
+    const fileData = data.slice(contentStart, contentEnd)
+    if (name && !name.endsWith('/')) entries.push({ name, data: fileData })
+    const padding = (512 - (size % 512)) % 512
+    offset = contentEnd + padding
+  }
+  return entries
+}
+
+function toFile(name: string, data: Uint8Array): File {
+  const buf = data.buffer instanceof ArrayBuffer
+    ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+    : Uint8Array.from(data).buffer
+  return new File([buf], name)
+}
+
+async function expandArchive(fileName: string, bytes: Uint8Array): Promise<File[]> {
+  const lower = fileName.toLowerCase()
+  if (lower.endsWith('.zip')) {
+    const unzipped = unzipSync(bytes)
+    return Object.entries(unzipped)
+      .filter(([entryName, data]) => entryName && data.length)
+      .map(([entryName, data]) => toFile(`${fileName}::${entryName}`, data))
+  }
+  if (lower.endsWith('.tar') || looksLikeTar(bytes)) {
+    return untar(bytes).map((e) => toFile(`${fileName}::${e.name}`, e.data))
+  }
+  if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz') || lower.endsWith('.gz')) {
+    const gunzipped = gunzipSync(bytes)
+    if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz') || looksLikeTar(gunzipped)) {
+      return untar(gunzipped).map((e) => toFile(`${fileName}::${e.name}`, e.data))
+    }
+    const base = fileName.replace(/\.gz$/i, '').replace(/\.tgz$/i, '.tar')
+    return [toFile(base, gunzipped)]
+  }
+  return []
+}
+
+function isArchiveName(lower: string): boolean {
+  return lower.endsWith('.zip') || lower.endsWith('.gz') || lower.endsWith('.tgz') || lower.endsWith('.tar') || lower.endsWith('.tar.gz')
+}
+
+function makeError(fileName: string | undefined, message: string, detail?: string, sourceType?: string): ParseFileError {
+  const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `err-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return { id, fileName, message, detail, sourceType }
+}
+
 export async function parseFiles(
   files: FileList | File[],
   options?: { usedIds?: Set<string> },
-): Promise<{ tables: TableData[]; errors: string[] }> {
-  const arr: File[] = Array.from(files as any)
+): Promise<{ tables: TableData[]; errors: ParseFileError[] }> {
+  const queue: File[] = Array.from(files as any)
   const tables: TableData[] = []
-  const errors: string[] = []
+  const errors: ParseFileError[] = []
   const usedIds = options?.usedIds ?? new Set<string>()
 
-  for (const file of arr) {
+  while (queue.length) {
+    const file = queue.shift()!
     const name = file.name
-    const ext = name.split('.').pop()?.toLowerCase()
+    const lower = name.toLowerCase()
     try {
+      if (isArchiveName(lower)) {
+        const bytes = new Uint8Array(await readArrayBuffer(file))
+        try {
+          const extracted = await expandArchive(name, bytes)
+          if (!extracted.length) errors.push(makeError(name, `No files extracted from archive: ${name}`, 'Archive may be empty or contain unsupported entries'))
+          queue.push(...extracted)
+        } catch (err: any) {
+          errors.push(makeError(name, `Failed extracting ${name}: ${err?.message ?? err}`, err?.stack ?? String(err)))
+        }
+        continue
+      }
       let rows: Row[] = []
       let sourceText: string | undefined
       let sourceType: string | undefined
-      if (ext === 'csv') {
+      if (lower.endsWith('.csv')) {
         sourceText = await readText(file)
         rows = await parseDelimitedText(sourceText, ',')
         sourceType = 'csv'
       }
-      else if (ext === 'tsv') {
+      else if (lower.endsWith('.tsv')) {
         sourceText = await readText(file)
         rows = await parseDelimitedText(sourceText, '\t')
         sourceType = 'tsv'
       }
-      else if (ext === 'txt') {
+      else if (lower.endsWith('.txt')) {
         sourceText = await readText(file)
         const delimiter = detectDelimiter(sourceText)
         rows = await parseDelimitedText(sourceText, delimiter)
         sourceType = 'txt'
       }
-      else if (ext === 'jsonl') {
+      else if (lower.endsWith('.jsonl')) {
         sourceText = await readText(file)
         rows = await parseJsonl(file)
         sourceType = 'jsonl'
       }
-      else if (ext === 'json') {
+      else if (lower.endsWith('.json')) {
         sourceText = await readText(file)
         rows = await parseJson(file)
         sourceType = 'json'
       }
       else {
-        errors.push(`Unsupported file type: ${name}`)
+        errors.push(makeError(name, `Unsupported file type: ${name}`, 'Supported: csv, tsv, txt, json, jsonl, zip, tar, gz, tgz'))
         continue
       }
       if (!rows.length) {
-        errors.push(`No rows parsed for ${name}`)
+        errors.push(makeError(name, `No rows parsed for ${name}`, 'Parsed 0 rows. Check headers and delimiter; adjust parsing options (delimiter/skip rows).'))
         continue
       }
       const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
@@ -138,7 +223,7 @@ export async function parseFiles(
       const id = uniqueId(slugify(tableBase), usedIds)
       tables.push({ id, name: tableBase, fileName: name, columns, rows, sourceText, sourceType })
     } catch (e: any) {
-      errors.push(`Failed parsing ${name}: ${e?.message ?? e}`)
+      errors.push(makeError(name, `Failed parsing ${name}: ${e?.message ?? e}`, e?.stack ?? String(e)))
     }
   }
 
