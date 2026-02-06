@@ -94,6 +94,11 @@ function App() {
   useEffect(() => { tablesRef.current = tables }, [tables])
 
   useEffect(() => {
+    const stored = localStorage.getItem('sidebarWidth')
+    if (stored) document.documentElement.style.setProperty('--sidebar-width', `${stored}px`)
+  }, [])
+
+  useEffect(() => {
     const list = loadProjectList()
     if (!list.length) {
       const id = makeProjectId('Project')
@@ -278,6 +283,27 @@ function App() {
     setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)))
   }, [])
 
+  const handleProjectDuplicate = useCallback(() => {
+    if (!projectId) return
+    const source = projects.find((p) => p.id === projectId)
+    const baseName = source?.name ?? 'Project'
+    let candidate = `${baseName} (copy)`
+    let idx = 2
+    while (projects.some((p) => p.name === candidate)) {
+      candidate = `${baseName} (copy ${idx++})`
+    }
+    const newId = makeProjectId(candidate)
+    const state = loadProject(projectId)
+    saveProjectList([...projects, { id: newId, name: candidate }])
+    saveProject(newId, state ? { ...state, projectId: newId } : {
+      projectId: newId, tablesSources: {}, nodePositions: {}, edges: [], rootTableId: '', leadRowIndex: 0, selectedColumns: {}, expandedTables: {}, tableParsingOptions: {}, edgeTypes: {},
+    })
+    setProjects((prev) => [...prev, { id: newId, name: candidate }])
+    setProjectId(newId)
+    setProjectsModalOpen(false)
+    closeMenus()
+  }, [projectId, projects, closeMenus])
+
   const handleTableExpandToggle = useCallback((tableId: string) => {
     setExpandedTables((prev) => ({ ...prev, [tableId]: !prev[tableId] }))
   }, [])
@@ -457,6 +483,29 @@ function App() {
       ...prev,
       [tableId]: { ...(prev[tableId] ?? {}), [original]: original },
     }))
+  }, [])
+
+  const handleDeleteColumn = useCallback((tableId: string, column: string) => {
+    setTables((prev) => prev.map((t) => {
+      if (t.id !== tableId) return t
+      const columns = t.columns.filter((c) => c !== column)
+      const rows = t.rows.map((r) => {
+        if (!(column in r)) return r
+        const nr = { ...r }
+        delete (nr as any)[column]
+        return nr
+      })
+      const renames = { ...(t.columnRenames ?? {}) }
+      const original = findOriginalColumn(renames, column)
+      if (original) delete renames[original]
+      return { ...t, columns, rows, columnRenames: renames }
+    }))
+    setEdges((prev) => prev.filter((e) => !((e.source === tableId && e.sourceHandle === column) || (e.target === tableId && e.targetHandle === column))))
+    setSelectedColumns((prev) => {
+      const next = { ...prev }
+      if (next[tableId]) next[tableId] = next[tableId].filter((c) => c !== column)
+      return next
+    })
   }, [])
 
   const handlePreview = useCallback(() => {
@@ -691,6 +740,26 @@ function App() {
     setMenuOpen((prev) => (prev === menu ? null : menu))
   }, [])
 
+  const handleSidebarResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 320
+    const min = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-min-width')) || 220
+    const max = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-max-width')) || 520
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX
+      const next = Math.min(max, Math.max(min, startWidth + delta))
+      document.documentElement.style.setProperty('--sidebar-width', `${next}px`)
+      localStorage.setItem('sidebarWidth', String(next))
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [])
+
   return (
     <div className="app" onClick={closeMenus}>
       <header className="topbar" onClick={(e) => e.stopPropagation()}>
@@ -700,6 +769,7 @@ function App() {
             {menuOpen === 'file' && (
               <div className="menu-dropdown" role="menu">
                 <button onClick={handleProjectCreate}>New Project</button>
+                <button onClick={handleProjectDuplicate}>Duplicate Project</button>
                 <button onClick={() => { setProjectsModalOpen('open'); closeMenus() }}>Open Project</button>
                 <button onClick={() => { setProjectsModalOpen('manage'); closeMenus() }}>Manage Projects</button>
               </div>
@@ -768,7 +838,8 @@ function App() {
                       {expanded ? '▾' : '▸'}
                     </button>
                     <button className="table-item__name" onClick={() => setRootTableId(t.id)}>
-                      {t.name} <span className="table-item__count">({t.rows.length})</span>
+                      <span className="table-item__label">{t.name}</span>
+                      <span className="table-item__count">({t.rows.length})</span>
                       {t.id === rootTableId && <span className="table-item__root">Root</span>}
                     </button>
                     <div className="table-item__actions">
@@ -796,7 +867,7 @@ function App() {
                         const renames = t.columnRenames ?? {}
                         const original = Object.entries(renames).find((entry) => entry[1] === col)?.[0] ?? col
                         return (
-                          <li key={col} className="table-column">
+                          <li key={col} className="table-column" onContextMenu={(e) => onColumnContextMenu(t.id, col, e)}>
                             <label>
                               <input
                                 type="checkbox"
@@ -814,6 +885,9 @@ function App() {
                                   ↺
                                 </button>
                               )}
+                              <button className="table-column__delete" onClick={() => handleDeleteColumn(t.id, col)} aria-label={`Delete ${col}`}>
+                                ×
+                              </button>
                             </div>
                           </li>
                         )
@@ -871,6 +945,7 @@ function App() {
         </section>
 
       </aside>
+      <div className="sidebar-resizer" onMouseDown={handleSidebarResize} />
       <main className="canvas" onClick={closeContextMenu}>
         <ReactFlow
           nodes={nodes}
@@ -1112,46 +1187,59 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
             </div>
           </div>
         )}
-        {contextMenu && contextMenu.type === 'table' && (
-          <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
-            <h4>Table</h4>
-            <button onClick={() => { openTablePreview(contextMenu.tableId); closeContextMenu() }}>View Table</button>
-            <button onClick={() => { handleRenameTable(contextMenu.tableId); closeContextMenu() }}>Rename</button>
-            {tables.find((t) => t.id === contextMenu.tableId)?.originalName && tables.find((t) => t.id === contextMenu.tableId)?.originalName !== tables.find((t) => t.id === contextMenu.tableId)?.name && (
-              <button onClick={() => { handleResetTableName(contextMenu.tableId); closeContextMenu() }}>Reset name</button>
-            )}
-            <h5>Parsing options</h5>
-            <label>
-              Delimiter
-              <select
-                value={tableParsingOptions[contextMenu.tableId]?.delimiter ?? 'auto'}
-                onChange={(e) => reparseTable(contextMenu.tableId, {
-                  ...tableParsingOptions[contextMenu.tableId],
-                  delimiter: e.target.value as any,
-                  skipRows: tableParsingOptions[contextMenu.tableId]?.skipRows ?? 0,
-                })}
-              >
-                <option value="auto">Auto</option>
-                <option value="csv">Comma</option>
-                <option value="tsv">Tab</option>
-              </select>
-            </label>
-            <label>
-              Skip rows
-              <input
-                type="number"
-                min={0}
-                value={tableParsingOptions[contextMenu.tableId]?.skipRows ?? 0}
-                onChange={(e) => reparseTable(contextMenu.tableId, {
-                  ...tableParsingOptions[contextMenu.tableId],
-                  skipRows: Number(e.target.value) || 0,
-                  delimiter: tableParsingOptions[contextMenu.tableId]?.delimiter ?? 'auto',
-                })}
-              />
-            </label>
-            <button onClick={closeContextMenu}>Close</button>
-          </div>
-        )}
+        {contextMenu && contextMenu.type === 'table' && (() => {
+          const table = tables.find((t) => t.id === contextMenu.tableId)
+          const isDelimited = table ? ['csv', 'tsv'].includes((table.sourceType ?? '').toLowerCase()) : false
+          return (
+            <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+              <h4>Table</h4>
+              <button onClick={() => { openTablePreview(contextMenu.tableId); closeContextMenu() }}>View Table</button>
+              <button onClick={() => { setRootTableId(contextMenu.tableId); setDocumentRootIds((prev) => prev.length ? prev : [contextMenu.tableId]); closeContextMenu() }}>Set as Root</button>
+              <button onClick={() => { toggleDocumentRoot(contextMenu.tableId); closeContextMenu() }}>
+                {documentRootIds.includes(contextMenu.tableId) ? 'Unset Document Root' : 'Set Document Root'}
+              </button>
+              <button onClick={() => { handleRenameTable(contextMenu.tableId); closeContextMenu() }}>Rename</button>
+              {table?.originalName && table.originalName !== table.name && (
+                <button onClick={() => { handleResetTableName(contextMenu.tableId); closeContextMenu() }}>Reset name</button>
+              )}
+              <button onClick={() => { handleDeleteTable(contextMenu.tableId); closeContextMenu() }}>Delete</button>
+              {isDelimited && (
+                <>
+                  <h5>Parsing options</h5>
+                  <label>
+                    Delimiter
+                    <select
+                      value={tableParsingOptions[contextMenu.tableId]?.delimiter ?? 'auto'}
+                      onChange={(e) => reparseTable(contextMenu.tableId, {
+                        ...tableParsingOptions[contextMenu.tableId],
+                        delimiter: e.target.value as any,
+                        skipRows: tableParsingOptions[contextMenu.tableId]?.skipRows ?? 0,
+                      })}
+                    >
+                      <option value="auto">Auto</option>
+                      <option value="csv">Comma</option>
+                      <option value="tsv">Tab</option>
+                    </select>
+                  </label>
+                  <label>
+                    Skip rows
+                    <input
+                      type="number"
+                      min={0}
+                      value={tableParsingOptions[contextMenu.tableId]?.skipRows ?? 0}
+                      onChange={(e) => reparseTable(contextMenu.tableId, {
+                        ...tableParsingOptions[contextMenu.tableId],
+                        skipRows: Number(e.target.value) || 0,
+                        delimiter: tableParsingOptions[contextMenu.tableId]?.delimiter ?? 'auto',
+                      })}
+                    />
+                  </label>
+                </>
+              )}
+              <button onClick={closeContextMenu}>Close</button>
+            </div>
+          )
+        })()}
         {contextMenu && contextMenu.type === 'column' && (() => {
           const table = tables.find((t) => t.id === contextMenu.tableId)
           const original = table ? findOriginalColumn(table.columnRenames ?? {}, contextMenu.column) ?? contextMenu.column : contextMenu.column
@@ -1163,6 +1251,7 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
               {original !== contextMenu.column && (
                 <button onClick={() => { handleResetColumnName(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Reset name</button>
               )}
+              <button onClick={() => { handleDeleteColumn(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Delete</button>
               <button onClick={closeContextMenu}>Close</button>
             </div>
           )

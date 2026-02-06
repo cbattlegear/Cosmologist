@@ -8,11 +8,11 @@ Embed related data/potentially recursive
 [x] Output all documents/tables
 
 ## UI Cleanup
-Auto Expand Sidebar for text
-Allow sidebar resize
-Make sure Table nodes don't have bottom scroll bars
-Duplicate Projects
-Add Delete function to Right click menus for all columns and tables
-Verify Table view shows properly
-Make connection points more obvious/outside of boxes
+[x] Auto Expand Sidebar for text
+[x] Allow sidebar resize
+[x] Make sure Table nodes don't have bottom scroll bars
+[x] Duplicate Projects
+[x] Add Delete function to Right click menus for all columns and tables
+[x] Verify Table view shows properly
+[x] Make connection points more obvious/outside of boxes
 

@@ -27,6 +27,12 @@
   min-height: 0;
 }
 
+:root {
+  --sidebar-width: 320px;
+  --sidebar-min-width: 220px;
+  --sidebar-max-width: 520px;
+}
+
 .persist-error {
   background: #ffe8e8;
   border: 1px solid #f5bcbc;
@@ -37,7 +43,7 @@
 }
 
 .sidebar {
-  width: 320px;
+  width: var(--sidebar-width);
   padding: 1rem;
   overflow-y: auto;
   border-right: 1px solid #e0e0e0;
@@ -45,6 +51,24 @@
   display: flex;
   flex-direction: column;
   gap: 1.2rem;
+}
+
+.sidebar-resizer {
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 5;
+}
+
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: #d0d0d0;
 }
 
 .sidebar section h2 {
@@ -231,6 +255,7 @@
   gap: 0.4rem;
   padding: 0.2rem 0.4rem;
   border-radius: 6px;
+  min-width: 0;
 }
 
 .table-item__header {
@@ -238,6 +263,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
+  min-width: 0;
 }
 
 .table-item__toggle {
@@ -247,6 +273,7 @@
   font-size: 1rem;
   line-height: 1;
   padding: 0 0.3rem;
+  flex-shrink: 0;
 }
 
 .table-item.active {
@@ -255,6 +282,7 @@
 
 .table-item__name {
   flex: 1;
+  min-width: 0;
   text-align: left;
   border: none;
   background: transparent;
@@ -264,12 +292,27 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  overflow: hidden;
+}
+
+.table-item__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-item__count,
+.table-item__root {
+  flex-shrink: 0;
 }
 
 .table-item__actions {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .table-item__docroot.active {
@@ -306,7 +349,8 @@
 }
 
 .table-column__rename,
-.table-column__reset {
+.table-column__reset,
+.table-column__delete {
   border: none;
   background: none;
   cursor: pointer;
@@ -315,8 +359,13 @@
 }
 
 .table-column__rename:hover,
-.table-column__reset:hover {
+.table-column__reset:hover,
+.table-column__delete:hover {
   color: #333;
+}
+
+.table-column__delete {
+  color: #b3261e;
 }
 
 .table-item__count {
@@ -385,18 +434,29 @@
 
 .relationship-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.4rem;
+  gap: 0.5rem;
   padding: 0.2rem 0.4rem;
   border-radius: 6px;
   border: 1px solid transparent;
+  min-width: 0;
 }
 
 .relationship-item.empty {
   color: #777;
   font-size: 0.85rem;
   border: none;
+}
+
+.relationship-item > span {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .relationship-item__delete {
@@ -406,6 +466,7 @@
   font-size: 1.1rem;
   cursor: pointer;
   padding: 0 0.2rem;
+  flex-shrink: 0;
 }
 
 .relationship-item__delete:hover {
