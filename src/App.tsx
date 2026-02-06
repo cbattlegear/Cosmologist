@@ -35,6 +35,7 @@ import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import TableNode, { type TableNodeData } from './components/TableNode'
 import JsonTree from './components/JsonTree'
+import { estimateRu, type RuEstimate } from './lib/ru'
 import logoUrl from './assets/logo.svg'
 
 const nodeTypes = { tableNode: TableNode }
@@ -67,6 +68,7 @@ function App() {
   const [persistError, setPersistError] = useState<string>('')
   const [preview, setPreview] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
+  const [previewRu, setPreviewRu] = useState<RuEstimate | null>(null)
   const [previewMode, setPreviewMode] = useState<'tree' | 'raw'>('tree')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [tablePreviewOpen, setTablePreviewOpen] = useState(false)
@@ -518,12 +520,14 @@ function App() {
         columnsFilter: selectedColumns,
       })
       setPreviewData(doc)
+      setPreviewRu(estimateRu(doc))
       setPreview(JSON.stringify(doc, null, 2))
       setPreviewMode('tree')
       setPreviewOpen(true)
     } catch (e: any) {
       setPreview(`Error: ${e?.message ?? e}`)
       setPreviewData(null)
+      setPreviewRu(null)
       setPreviewMode('raw')
     }
   }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns])
@@ -996,6 +1000,14 @@ function App() {
                 </div>
               </div>
               <div className="preview-modal__body preview-modal__body--json">
+                {previewRu && (
+                  <div className="preview-ru">
+                    <div>Size: {previewRu.sizeKB.toFixed(2)} KB</div>
+                    <div>Read RU (point): {previewRu.readPointRU.toFixed(2)}</div>
+                    <div>Read RU (query): {previewRu.readQueryRU.toFixed(2)}</div>
+                    <div>Write RU: {previewRu.writeRU.toFixed(2)}</div>
+                  </div>
+                )}
                 {previewMode === 'tree' && previewData ? (
                   <JsonTree data={previewData} collapsedLevels={1} />
                 ) : (

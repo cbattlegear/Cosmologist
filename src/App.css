@@ -739,6 +739,23 @@
   background: #1e1e1e;
   color: #d4d4d4;
   padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.preview-ru {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.25rem 1rem;
+  font-size: 0.85rem;
+  color: #9cdcfe;
+}
+
+.preview-ru > div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .preview-modal__body--json .json-tree,
