@@ -1,9 +1,18 @@
 [x] Zip/gzip/tar input
 [x] More in depth error reporting on file upload
 [x] Rename columns and tables
-SQL Schema import with Faker data
+[x] SQL Schema import with Faker data (schema paste import)
 Schema Mapping/Pivots with Regex
 Embed related data/potentially recursive
-Allow for Document root vs Active Root
+[x] Allow for Document root vs Active Root
+[x] Output all documents/tables
+
+## UI Cleanup
+Auto Expand Sidebar for text
+Allow sidebar resize
+Make sure Table nodes don't have bottom scroll bars
 Duplicate Projects
-Output all documents/tables
+Add Delete function to Right click menus for all columns and tables
+Verify Table view shows properly
+Make connection points more obvious/outside of boxes
+

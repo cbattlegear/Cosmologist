@@ -32,6 +32,15 @@
   border-radius: 999px;
 }
 
+.table-node__badge--doc {
+  background: #2b6cb0;
+}
+
+.table-node--docroot {
+  border: 2px solid #2b6cb0;
+  box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.2);
+}
+
 .table-node__columns {
   padding: 0.4rem 0.2rem 0.6rem;
   max-height: 260px;

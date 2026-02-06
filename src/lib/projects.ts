@@ -15,6 +15,8 @@ export type ProjectState = {
   edgeTypes?: Record<string, 'one-to-many' | 'one-to-one'>
   tableRenames?: Record<string, string>
   columnRenames?: Record<string, Record<string, string>> // tableId -> original -> current
+  documentRootIds?: string[]
+  sqlSchemaText?: string
 }
 
 const PROJECT_LIST_KEY = 'cosmologist:projects'
