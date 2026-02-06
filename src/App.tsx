@@ -67,6 +67,7 @@ function App() {
   const [persistError, setPersistError] = useState<string>('')
   const [preview, setPreview] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
+  const [previewMode, setPreviewMode] = useState<'tree' | 'raw'>('tree')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [tablePreviewOpen, setTablePreviewOpen] = useState(false)
   const [selectedError, setSelectedError] = useState<ParseFileError | null>(null)
@@ -516,9 +517,12 @@ function App() {
       })
       setPreviewData(doc)
       setPreview(JSON.stringify(doc, null, 2))
+      setPreviewMode('tree')
       setPreviewOpen(true)
     } catch (e: any) {
       setPreview(`Error: ${e?.message ?? e}`)
+      setPreviewData(null)
+      setPreviewMode('raw')
     }
   }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns])
 
@@ -976,19 +980,23 @@ function App() {
 
         {previewOpen && (
           <div className="preview-modal" onClick={() => setPreviewOpen(false)}>
-            <div className="preview-modal__content" onClick={(e) => e.stopPropagation()}>
+            <div className="preview-modal__content preview-modal__content--json" onClick={(e) => e.stopPropagation()}>
               <div className="preview-modal__header">
                 <h3>Preview JSON</h3>
                 <div className="preview-modal__actions">
+                  <div className="preview-modal__mode">
+                    <button className={previewMode === 'tree' ? 'active' : ''} onClick={() => setPreviewMode('tree')}>Tree</button>
+                    <button className={previewMode === 'raw' ? 'active' : ''} onClick={() => setPreviewMode('raw')}>Raw</button>
+                  </div>
                   <button onClick={() => navigator.clipboard?.writeText(preview)}>Copy</button>
                   <button onClick={() => setPreviewOpen(false)}>Close</button>
                 </div>
               </div>
-              <div className="preview-modal__body">
-                {previewData ? (
+              <div className="preview-modal__body preview-modal__body--json">
+                {previewMode === 'tree' && previewData ? (
                   <JsonTree data={previewData} collapsedLevels={1} />
                 ) : (
-                  <pre className="preview">{preview || 'No preview yet'}</pre>
+                  <pre className="preview preview--modal">{preview || 'No preview yet'}</pre>
                 )}
               </div>
             </div>
