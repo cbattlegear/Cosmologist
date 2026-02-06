@@ -76,6 +76,8 @@ function App() {
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+
+  const currentProjectName = useMemo(() => projects.find((p) => p.id === projectId)?.name ?? 'Project', [projects, projectId])
   const [dragOverlay, setDragOverlay] = useState(false)
   const [sqlSchemaModalOpen, setSqlSchemaModalOpen] = useState(false)
   const [sqlSchemaText, setSqlSchemaText] = useState('')
@@ -799,6 +801,7 @@ function App() {
             )}
           </div>
         </nav>
+        <div className="project-title" title={currentProjectName}>{currentProjectName}</div>
         <div className="app-brand">
           <img src={logoUrl} alt="Cosmologist logo" className="app-logo" />
           <div className="app-title">Cosmologist</div>
