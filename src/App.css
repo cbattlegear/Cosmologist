@@ -858,6 +858,10 @@
   margin-left: 0.5rem;
 }
 
+.preview-modal__actions > .preview-modal__mode {
+  margin-left: 0;
+}
+
 .preview-modal__mode {
   display: flex;
   gap: 0.25rem;
@@ -892,10 +896,14 @@
 }
 
 .json-node {
+  display: block;
+  white-space: pre;
+}
+
+.json-node__line {
   display: flex;
   align-items: flex-start;
   gap: 0.25rem;
-  white-space: pre;
 }
 
 .json-node__caret {
