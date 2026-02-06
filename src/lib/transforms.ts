@@ -45,7 +45,7 @@ export interface TablePivot {
  * Resolve which concrete columns a pivot group matches.
  * Returns a map: index (suffix) → columnName.
  */
-function matchGroupColumns(
+export function matchGroupColumns(
   allColumns: string[],
   pattern: string,
 ): Map<string, string> {

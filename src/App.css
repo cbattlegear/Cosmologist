@@ -635,11 +635,28 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  max-width: 260px;
+}
+
+.context-menu--wide {
+  max-width: 320px;
 }
 
 .context-menu h4 {
   margin: 0;
   font-size: 0.95rem;
+}
+
+.context-menu h5 {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.context-menu__edge-label {
+  font-size: 0.8rem;
+  color: #666;
+  word-break: break-all;
 }
 
 .context-menu label {
@@ -650,9 +667,51 @@
 }
 
 .context-menu select,
-.context-menu input,
-.context-menu button {
+.context-menu > input,
+.context-menu > button,
+.context-menu label > input,
+.context-menu label > select {
   font-size: 0.85rem;
+}
+
+.context-menu__columns-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.context-menu__column-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.context-menu__column-actions button {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+}
+
+.context-menu__column-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  padding: 0.25rem;
+}
+
+.context-menu__column-list li label {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.1rem 0;
+}
+
+.context-menu__column-list li label input[type="checkbox"] {
+  margin: 0;
 }
 
 .preview-modal {

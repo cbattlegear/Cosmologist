@@ -65,6 +65,9 @@ function App() {
     | null
   >(null)
   const [edgeTypes, setEdgeTypes] = useState<Record<string, 'one-to-many' | 'one-to-one'>>({})
+  const [edgeColumnFilters, setEdgeColumnFilters] = useState<Record<string, string[]>>({})
+  const [edgeMaxDepth, setEdgeMaxDepth] = useState<Record<string, number>>({})
+  const [edgePropertyNames, setEdgePropertyNames] = useState<Record<string, string>>({})
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
   const [projectId, setProjectId] = useState('')
   const [hydrated, setHydrated] = useState(false)
@@ -143,6 +146,9 @@ function App() {
         )
         setEdges(applied.edgesOut)
         setEdgeTypes(state.edgeTypes ?? {})
+        setEdgeColumnFilters((state as any).edgeColumnFilters ?? {})
+        setEdgeMaxDepth((state as any).edgeMaxDepth ?? {})
+        setEdgePropertyNames((state as any).edgePropertyNames ?? {})
         setRootTableId(state.rootTableId ?? applied.tablesOut[0]?.id ?? '')
         setLeadRowIndex(state.leadRowIndex ?? 0)
         setSelectedColumns(applied.selectedOut)
@@ -160,6 +166,9 @@ function App() {
       setNodes([])
       setEdges([])
       setEdgeTypes({})
+      setEdgeColumnFilters({})
+      setEdgeMaxDepth({})
+      setEdgePropertyNames({})
       setRootTableId('')
       setLeadRowIndex(0)
       setSelectedColumns({})
@@ -198,9 +207,12 @@ function App() {
       sqlSchemaText: sqlSchemaSource,
       columnSplits,
       tablePivots,
+      edgeColumnFilters,
+      edgeMaxDepth,
+      edgePropertyNames,
     } as any)
     setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
-  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots])
+  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames])
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const { tables: parsed, errors } = await parseFiles(files)
     setErrors(errors)
@@ -557,7 +569,7 @@ function App() {
   const handlePreview = useCallback(() => {
     if (!rootTableId || !tables.length) return
     try {
-      const doc = buildJoinedDocument(rootTableId, leadRowIndex, tables, toRelationshipEdges(edges, edgeTypes), {
+      const doc = buildJoinedDocument(rootTableId, leadRowIndex, tables, toRelationshipEdges(edges, edgeTypes, edgeColumnFilters, edgeMaxDepth, edgePropertyNames), {
         columnsFilter: selectedColumns,
         columnSplits,
         tablePivots,
@@ -573,13 +585,13 @@ function App() {
       setPreviewRu(null)
       setPreviewMode('raw')
     }
-  }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots])
+  }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames])
 
   const handleDownload = useCallback(async () => {
     if (!tables.length) return
     const roots = documentRootIds.length ? documentRootIds : (rootTableId ? [rootTableId] : [])
     if (!roots.length) return
-    const relationships = toRelationshipEdges(edges, edgeTypes)
+    const relationships = toRelationshipEdges(edges, edgeTypes, edgeColumnFilters, edgeMaxDepth, edgePropertyNames)
     const zip = new JSZip()
     roots.forEach((rid) => {
       const lead = tables.find((t) => t.id === rid)
@@ -597,7 +609,7 @@ function App() {
     const blob = await zip.generateAsync({ type: 'blob' })
     const name = roots.length === 1 ? (tables.find((t) => t.id === roots[0])?.name ?? 'documents') : 'documents'
     saveAs(blob, `${name}_export.zip`)
-  }, [rootTableId, documentRootIds, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots])
+  }, [rootTableId, documentRootIds, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames])
 
   const applyParsingOptions = useCallback(async (
     tablesInput: TableData[],
@@ -961,7 +973,7 @@ function App() {
           <ul className="relationship-list">
             {relationshipsSummaries.length === 0 && <li className="relationship-item empty">No relationships</li>}
             {relationshipsSummaries.map((r) => (
-              <li key={r.id} className="relationship-item">
+              <li key={r.id} className="relationship-item" onContextMenu={(e) => { e.preventDefault(); setContextMenu({ type: 'edge', x: e.clientX, y: e.clientY, edgeId: r.id }) }}>
                 <span>{r.label}</span>
                 <button className="relationship-item__delete" onClick={() => handleDeleteEdge(r.id)} aria-label={`Delete ${r.label}`}>
                   ×
@@ -1375,23 +1387,112 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
             </div>
           )
         })()}
-        {contextMenu && contextMenu.type === 'edge' && (
-          <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
-            <h4>Relationship</h4>
-            <label>
-              Type
-              <select
-                value={edgeTypes[contextMenu.edgeId] ?? 'one-to-many'}
-                onChange={(e) => setEdgeTypes((prev) => ({ ...prev, [contextMenu.edgeId]: e.target.value as any }))}
-              >
-                <option value="one-to-many">1:* (array)</option>
-                <option value="one-to-one">1:1 (object)</option>
-              </select>
-            </label>
-            <button onClick={() => handleDeleteEdge(contextMenu.edgeId)}>Delete</button>
-            <button onClick={closeContextMenu}>Close</button>
-          </div>
-        )}
+        {contextMenu && contextMenu.type === 'edge' && (() => {
+          const edge = edges.find((e) => e.id === contextMenu.edgeId)
+          const childTableId = edge ? edge.target : ''
+          const parentTableId = edge ? edge.source : ''
+          const childTable = tables.find((t) => t.id === childTableId)
+          const parentTable = tables.find((t) => t.id === parentTableId)
+          const childColumns = childTable?.columns ?? []
+          const currentFilter = edgeColumnFilters[contextMenu.edgeId]
+          const isRecursive = childTableId === parentTableId
+          return (
+            <div className="context-menu context-menu--wide" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+              <h4>Relationship</h4>
+              <div className="context-menu__edge-label">
+                {parentTable?.name ?? parentTableId}.{edge?.sourceHandle} → {childTable?.name ?? childTableId}.{edge?.targetHandle}
+              </div>
+              <label>
+                Type
+                <select
+                  value={edgeTypes[contextMenu.edgeId] ?? 'one-to-many'}
+                  onChange={(e) => setEdgeTypes((prev) => ({ ...prev, [contextMenu.edgeId]: e.target.value as any }))}
+                >
+                  <option value="one-to-many">1:* (array)</option>
+                  <option value="one-to-one">1:1 (object)</option>
+                </select>
+              </label>
+              <label>
+                Property name
+                <input
+                  type="text"
+                  value={edgePropertyNames[contextMenu.edgeId] ?? ''}
+                  placeholder={childTable?.name ?? 'auto'}
+                  onChange={(e) => {
+                    const v = e.target.value.trim()
+                    setEdgePropertyNames((prev) => {
+                      if (!v) {
+                        const next = { ...prev }
+                        delete next[contextMenu.edgeId]
+                        return next
+                      }
+                      return { ...prev, [contextMenu.edgeId]: v }
+                    })
+                  }}
+                />
+              </label>
+              {(isRecursive || childTableId !== parentTableId) && (
+                <label>
+                  Max depth{isRecursive ? ' (recursive)' : ''}
+                  <input
+                    type="number"
+                    min={0}
+                    value={edgeMaxDepth[contextMenu.edgeId] ?? (isRecursive ? 0 : '')}
+                    placeholder={isRecursive ? '0 (blocked)' : 'unlimited'}
+                    onChange={(e) => {
+                      const v = e.target.value === '' ? undefined : Number(e.target.value)
+                      setEdgeMaxDepth((prev) => {
+                        const next = { ...prev }
+                        if (v === undefined) delete next[contextMenu.edgeId]
+                        else next[contextMenu.edgeId] = Math.max(0, v)
+                        return next
+                      })
+                    }}
+                  />
+                </label>
+              )}
+              <div className="context-menu__columns-section">
+                <h5>Included columns ({childTable?.name})</h5>
+                <div className="context-menu__column-actions">
+                  <button onClick={() => setEdgeColumnFilters((prev) => ({ ...prev, [contextMenu.edgeId]: [...childColumns] }))}>All</button>
+                  <button onClick={() => setEdgeColumnFilters((prev) => ({ ...prev, [contextMenu.edgeId]: [] }))}>None</button>
+                  <button onClick={() => {
+                    const next = { ...edgeColumnFilters }
+                    delete next[contextMenu.edgeId]
+                    setEdgeColumnFilters(next)
+                  }}>Reset</button>
+                </div>
+                <ul className="context-menu__column-list">
+                  {childColumns.map((col) => {
+                    const checked = !currentFilter || currentFilter.includes(col)
+                    return (
+                      <li key={col}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setEdgeColumnFilters((prev) => {
+                                const existing = prev[contextMenu.edgeId] ?? [...childColumns]
+                                const next = checked
+                                  ? existing.filter((c) => c !== col)
+                                  : [...existing, col]
+                                return { ...prev, [contextMenu.edgeId]: next }
+                              })
+                            }}
+                          />
+                          {col}
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+              <button onClick={() => handleDeleteEdge(contextMenu.edgeId)}>Delete</button>
+              <button onClick={closeContextMenu}>Close</button>
+            </div>
+          )
+        })()}
       </main>
     </div>
   </div>
