@@ -13,6 +13,8 @@ export type ProjectState = {
   expandedTables: Record<string, boolean>
   tableParsingOptions: Record<string, { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }>
   edgeTypes?: Record<string, 'one-to-many' | 'one-to-one'>
+  tableRenames?: Record<string, string>
+  columnRenames?: Record<string, Record<string, string>> // tableId -> original -> current
 }
 
 const PROJECT_LIST_KEY = 'cosmologist:projects'

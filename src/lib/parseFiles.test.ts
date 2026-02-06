@@ -68,6 +68,8 @@ describe('parseFiles', () => {
     const { tables, errors } = await parseFiles([fileFromString('people.csv', csv)])
     expect(errors).toHaveLength(0)
     expect(tables[0].name).toBe('people')
+    expect(tables[0].originalName).toBe('people')
+    expect(tables[0].columnRenames).toEqual({ id: 'id', name: 'name' })
     expect(tables[0].columns).toEqual(['id', 'name'])
     expect(tables[0].rows).toHaveLength(2)
   })

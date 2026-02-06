@@ -266,6 +266,54 @@
   gap: 0.5rem;
 }
 
+.table-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.table-item__rename,
+.table-item__reset,
+.table-item__delete {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.2rem;
+}
+
+.table-item__rename:hover,
+.table-item__reset:hover,
+.table-item__delete:hover {
+  color: #333;
+}
+
+.table-column {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.table-column__actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.table-column__rename,
+.table-column__reset {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.15rem;
+}
+
+.table-column__rename:hover,
+.table-column__reset:hover {
+  color: #333;
+}
+
 .table-item__count {
   font-size: 0.8rem;
   color: #666;
