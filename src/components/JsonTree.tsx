@@ -33,19 +33,21 @@ const JsonNode: FC<JsonNodeProps> = ({ name, value, depth, collapsedLevels }) =>
     const entries = Object.entries(value)
     const label = `{${entries.length ? '…' : ''}}`
     return (
-      <div className="json-node json-node--object" style={{ paddingLeft: depth * 16 }}>
-        <span
-          className="json-node__caret"
-          role="button"
-          tabIndex={0}
-          onClick={toggle}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}
-        >
-          {collapsed ? '▸' : '▾'}
-        </span>
-        {name !== undefined && <span className="json-node__key">{String(name)}</span>}
-        <span className="json-node__sep">: </span>
-        <span className="json-node__braces">{label}</span>
+      <div className="json-node json-node--object" style={{ marginLeft: depth * 16 }}>
+        <div className="json-node__line">
+          <span
+            className="json-node__caret"
+            role="button"
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}
+          >
+            {collapsed ? '▸' : '▾'}
+          </span>
+          {name !== undefined && <span className="json-node__key">{String(name)}</span>}
+          <span className="json-node__sep">: </span>
+          <span className="json-node__braces">{label}</span>
+        </div>
         {!collapsed && (
           <div className="json-node__children">
             {entries.map(([k, v]) => (
@@ -60,19 +62,21 @@ const JsonNode: FC<JsonNodeProps> = ({ name, value, depth, collapsedLevels }) =>
   if (Array.isArray(value)) {
     const label = `[${value.length ? '…' : ''}]`
     return (
-      <div className="json-node json-node--array" style={{ paddingLeft: depth * 16 }}>
-        <span
-          className="json-node__caret"
-          role="button"
-          tabIndex={0}
-          onClick={toggle}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}
-        >
-          {collapsed ? '▸' : '▾'}
-        </span>
-        {name !== undefined && <span className="json-node__key">{String(name)}</span>}
-        <span className="json-node__sep">: </span>
-        <span className="json-node__braces">{label}</span>
+      <div className="json-node json-node--array" style={{ marginLeft: depth * 16 }}>
+        <div className="json-node__line">
+          <span
+            className="json-node__caret"
+            role="button"
+            tabIndex={0}
+            onClick={toggle}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle()}
+          >
+            {collapsed ? '▸' : '▾'}
+          </span>
+          {name !== undefined && <span className="json-node__key">{String(name)}</span>}
+          <span className="json-node__sep">: </span>
+          <span className="json-node__braces">{label}</span>
+        </div>
         {!collapsed && (
           <div className="json-node__children">
             {value.map((v, idx) => (
@@ -92,9 +96,11 @@ const JsonNode: FC<JsonNodeProps> = ({ name, value, depth, collapsedLevels }) =>
   }
 
   return (
-    <div className="json-node json-node--primitive" style={{ paddingLeft: depth * 16 }}>
-      {name !== undefined && <><span className="json-node__key">{String(name)}</span><span className="json-node__sep">: </span></>}
-      {renderPrimitive()}
+    <div className="json-node json-node--primitive" style={{ marginLeft: depth * 16 }}>
+      <div className="json-node__line">
+        {name !== undefined && <><span className="json-node__key">{String(name)}</span><span className="json-node__sep">: </span></>}
+        {renderPrimitive()}
+      </div>
     </div>
   )
 }

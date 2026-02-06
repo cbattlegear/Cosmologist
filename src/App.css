@@ -493,6 +493,18 @@
   overflow: auto;
 }
 
+.preview--modal {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  white-space: pre;
+  overflow: auto;
+  max-height: 100%;
+}
+
 .canvas {
   flex: 1;
   height: 100%;
@@ -704,6 +716,24 @@
   width: min(1000px, 95vw);
 }
 
+.preview-modal__content--json {
+  width: min(70vw, 900px);
+  max-width: 900px;
+  height: 75vh;
+}
+
+.preview-modal__body--json {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 0.5rem 0.75rem;
+}
+
+.preview-modal__body--json .json-tree,
+.preview-modal__body--json .preview--modal {
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
 .table-preview__body {
   display: flex;
   flex-direction: column;
@@ -818,8 +848,38 @@
   align-items: center;
 }
 
-.preview-modal__actions button {
+.preview-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.preview-modal__actions > button {
   margin-left: 0.5rem;
+}
+
+.preview-modal__actions > .preview-modal__mode {
+  margin-left: 0;
+}
+
+.preview-modal__mode {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.preview-modal__mode button {
+  border: 1px solid #555;
+  background: transparent;
+  color: inherit;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.preview-modal__mode button.active {
+  background: #555;
+  color: #fff;
 }
 
 .preview-modal__body {
@@ -831,33 +891,38 @@
 .json-tree {
   font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 0.85rem;
-  line-height: 1.4;
+  line-height: 1.45;
+  color: #d4d4d4;
 }
 
 .json-node {
+  display: block;
+  white-space: pre;
+}
+
+.json-node__line {
   display: flex;
   align-items: flex-start;
   gap: 0.25rem;
-  white-space: pre;
 }
 
 .json-node__caret {
   cursor: pointer;
-  color: #555;
+  color: #c5c5c5;
   user-select: none;
   width: 1rem;
 }
 
 .json-node__key {
-  color: #6f42c1;
+  color: #9cdcfe;
 }
 
 .json-node__sep {
-  color: #999;
+  color: #c5c5c5;
 }
 
 .json-node__braces {
-  color: #fd7e14;
+  color: #c586c0;
 }
 
 .json-node__children {
@@ -865,17 +930,14 @@
 }
 
 .json-node__value--string {
-  color: #22863a;
+  color: #ce9178;
 }
 
 .json-node__value--number {
-  color: #005cc5;
+  color: #b5cea8;
 }
 
-.json-node__value--boolean {
-  color: #d73a49;
-}
-
+.json-node__value--boolean,
 .json-node__value--null {
-  color: #999;
+  color: #569cd6;
 }
