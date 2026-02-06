@@ -29,4 +29,7 @@ export interface RelationshipEdge {
   sourceColumn: string
   targetColumn: string
   type?: 'one-to-many' | 'one-to-one'
+  includedColumns?: string[] // per-edge column filter for child table
+  maxDepth?: number          // recursion depth limit (0 = no recurse, undefined = default 1-level)
+  propertyName?: string      // override property name in joined output (defaults to child table name)
 }

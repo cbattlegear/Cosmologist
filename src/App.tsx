@@ -36,6 +36,7 @@ import { saveAs } from 'file-saver'
 import TableNode, { type TableNodeData } from './components/TableNode'
 import JsonTree from './components/JsonTree'
 import { estimateRu, type RuEstimate } from './lib/ru'
+import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transforms'
 import logoUrl from './assets/logo.svg'
 
 const nodeTypes = { tableNode: TableNode }
@@ -55,6 +56,8 @@ function App() {
   const [tableParsingOptions, setTableParsingOptions] = useState<Record<string, { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }>>({})
   const [tableRenames, setTableRenames] = useState<Record<string, string>>({})
   const [columnRenames, setColumnRenames] = useState<Record<string, Record<string, string>>>({})
+  const [columnSplits, setColumnSplits] = useState<ColumnSplit[]>([])
+  const [tablePivots, setTablePivots] = useState<TablePivot[]>([])
   const [contextMenu, setContextMenu] = useState<
     | { type: 'table'; x: number; y: number; tableId: string }
     | { type: 'column'; x: number; y: number; tableId: string; column: string }
@@ -62,6 +65,9 @@ function App() {
     | null
   >(null)
   const [edgeTypes, setEdgeTypes] = useState<Record<string, 'one-to-many' | 'one-to-one'>>({})
+  const [edgeColumnFilters, setEdgeColumnFilters] = useState<Record<string, string[]>>({})
+  const [edgeMaxDepth, setEdgeMaxDepth] = useState<Record<string, number>>({})
+  const [edgePropertyNames, setEdgePropertyNames] = useState<Record<string, string>>({})
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
   const [projectId, setProjectId] = useState('')
   const [hydrated, setHydrated] = useState(false)
@@ -74,6 +80,7 @@ function App() {
   const [tablePreviewOpen, setTablePreviewOpen] = useState(false)
   const [selectedError, setSelectedError] = useState<ParseFileError | null>(null)
   const [tablePreviewTableId, setTablePreviewTableId] = useState<string | null>(null)
+  const [tablePreviewTransformed, setTablePreviewTransformed] = useState(true)
   const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'help' | null>(null)
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -139,6 +146,9 @@ function App() {
         )
         setEdges(applied.edgesOut)
         setEdgeTypes(state.edgeTypes ?? {})
+        setEdgeColumnFilters((state as any).edgeColumnFilters ?? {})
+        setEdgeMaxDepth((state as any).edgeMaxDepth ?? {})
+        setEdgePropertyNames((state as any).edgePropertyNames ?? {})
         setRootTableId(state.rootTableId ?? applied.tablesOut[0]?.id ?? '')
         setLeadRowIndex(state.leadRowIndex ?? 0)
         setSelectedColumns(applied.selectedOut)
@@ -146,6 +156,8 @@ function App() {
         setTableParsingOptions(parsedOpts)
         setTableRenames(state.tableRenames ?? {})
         setColumnRenames(state.columnRenames ?? {})
+        setColumnSplits((state as any).columnSplits ?? [])
+        setTablePivots((state as any).tablePivots ?? [])
         setDocumentRootIds(state.documentRootIds ?? (applied.tablesOut[0] ? [applied.tablesOut[0].id] : []))
         setSqlSchemaSource(state.sqlSchemaText ?? '')
       })
@@ -154,12 +166,17 @@ function App() {
       setNodes([])
       setEdges([])
       setEdgeTypes({})
+      setEdgeColumnFilters({})
+      setEdgeMaxDepth({})
+      setEdgePropertyNames({})
       setRootTableId('')
       setLeadRowIndex(0)
       setSelectedColumns({})
       setExpandedTables({})
       setTableParsingOptions({})
       setDocumentRootIds([])
+      setColumnSplits([])
+      setTablePivots([])
     }
     setHydrated(true)
   }, [projectId])
@@ -188,9 +205,14 @@ function App() {
       columnRenames,
       documentRootIds,
       sqlSchemaText: sqlSchemaSource,
-    })
+      columnSplits,
+      tablePivots,
+      edgeColumnFilters,
+      edgeMaxDepth,
+      edgePropertyNames,
+    } as any)
     setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
-  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds])
+  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames])
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const { tables: parsed, errors } = await parseFiles(files)
     setErrors(errors)
@@ -244,9 +266,40 @@ function App() {
 
   const tablePreviewTable = useMemo(() => tables.find((t) => t.id === tablePreviewTableId) ?? null, [tables, tablePreviewTableId])
 
+  const tablePreviewHasTransforms = useMemo(() => {
+    if (!tablePreviewTableId) return false
+    return columnSplits.some((s) => s.tableId === tablePreviewTableId) || tablePivots.some((p) => p.tableId === tablePreviewTableId)
+  }, [tablePreviewTableId, columnSplits, tablePivots])
+
+  const tablePreviewRows = useMemo(() => {
+    if (!tablePreviewTable) return []
+    if (!tablePreviewTransformed || !tablePreviewHasTransforms) return tablePreviewTable.rows
+    return tablePreviewTable.rows.map((row) =>
+      applyTransforms(row, tablePreviewTable.id, tablePreviewTable.columns, columnSplits, tablePivots),
+    )
+  }, [tablePreviewTable, tablePreviewTransformed, tablePreviewHasTransforms, columnSplits, tablePivots])
+
+  const tablePreviewColumns = useMemo(() => {
+    if (!tablePreviewTable) return []
+    if (!tablePreviewTransformed || !tablePreviewHasTransforms || !tablePreviewRows.length) return tablePreviewTable.columns
+    // Derive columns from first transformed row (pivot may add/remove columns)
+    const seen = new Set<string>()
+    const cols: string[] = []
+    for (const row of tablePreviewRows.slice(0, 10)) {
+      for (const key of Object.keys(row)) {
+        if (!seen.has(key)) { seen.add(key); cols.push(key) }
+      }
+    }
+    return cols
+  }, [tablePreviewTable, tablePreviewTransformed, tablePreviewHasTransforms, tablePreviewRows])
+
   useEffect(() => {
-    setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id) } })))
-  }, [rootTableId, documentRootIds])
+    setNodes((prev) => prev.map((n) => {
+      const splitCols = new Set(columnSplits.filter((s) => s.tableId === n.id).map((s) => s.column))
+      const hasPivot = tablePivots.some((p) => p.tableId === n.id)
+      return { ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id), splitColumns: splitCols, hasPivot } }
+    }))
+  }, [rootTableId, documentRootIds, columnSplits, tablePivots])
 
   const relationshipsSummaries = useMemo(() => {
     return edges.map((e) => {
@@ -516,8 +569,10 @@ function App() {
   const handlePreview = useCallback(() => {
     if (!rootTableId || !tables.length) return
     try {
-      const doc = buildJoinedDocument(rootTableId, leadRowIndex, tables, toRelationshipEdges(edges, edgeTypes), {
+      const doc = buildJoinedDocument(rootTableId, leadRowIndex, tables, toRelationshipEdges(edges, edgeTypes, edgeColumnFilters, edgeMaxDepth, edgePropertyNames), {
         columnsFilter: selectedColumns,
+        columnSplits,
+        tablePivots,
       })
       setPreviewData(doc)
       setPreviewRu(estimateRu(doc))
@@ -530,13 +585,13 @@ function App() {
       setPreviewRu(null)
       setPreviewMode('raw')
     }
-  }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns])
+  }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames])
 
   const handleDownload = useCallback(async () => {
     if (!tables.length) return
     const roots = documentRootIds.length ? documentRootIds : (rootTableId ? [rootTableId] : [])
     if (!roots.length) return
-    const relationships = toRelationshipEdges(edges, edgeTypes)
+    const relationships = toRelationshipEdges(edges, edgeTypes, edgeColumnFilters, edgeMaxDepth, edgePropertyNames)
     const zip = new JSZip()
     roots.forEach((rid) => {
       const lead = tables.find((t) => t.id === rid)
@@ -545,6 +600,8 @@ function App() {
       lead.rows.forEach((_, idx) => {
         const doc = buildJoinedDocument(lead.id, idx, tables, relationships, {
           columnsFilter: selectedColumns,
+          columnSplits,
+          tablePivots,
         })
         folder.file(`${lead.name}_${idx}.json`, JSON.stringify(doc, null, 2))
       })
@@ -552,7 +609,7 @@ function App() {
     const blob = await zip.generateAsync({ type: 'blob' })
     const name = roots.length === 1 ? (tables.find((t) => t.id === roots[0])?.name ?? 'documents') : 'documents'
     saveAs(blob, `${name}_export.zip`)
-  }, [rootTableId, documentRootIds, tables, edges, edgeTypes, selectedColumns])
+  }, [rootTableId, documentRootIds, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames])
 
   const applyParsingOptions = useCallback(async (
     tablesInput: TableData[],
@@ -916,7 +973,7 @@ function App() {
           <ul className="relationship-list">
             {relationshipsSummaries.length === 0 && <li className="relationship-item empty">No relationships</li>}
             {relationshipsSummaries.map((r) => (
-              <li key={r.id} className="relationship-item">
+              <li key={r.id} className="relationship-item" onContextMenu={(e) => { e.preventDefault(); setContextMenu({ type: 'edge', x: e.clientX, y: e.clientY, edgeId: r.id }) }}>
                 <span>{r.label}</span>
                 <button className="relationship-item__delete" onClick={() => handleDeleteEdge(r.id)} aria-label={`Delete ${r.label}`}>
                   ×
@@ -1024,26 +1081,42 @@ function App() {
               <div className="preview-modal__header">
                 <h3>Table: {tablePreviewTable.name}</h3>
                 <div className="preview-modal__actions">
+                  {tablePreviewHasTransforms && (
+                    <div className="preview-modal__mode">
+                      <button className={tablePreviewTransformed ? 'active' : ''} onClick={() => setTablePreviewTransformed(true)}>Transformed</button>
+                      <button className={!tablePreviewTransformed ? 'active' : ''} onClick={() => setTablePreviewTransformed(false)}>Original</button>
+                    </div>
+                  )}
                   <button onClick={() => setTablePreviewOpen(false)}>Close</button>
                 </div>
               </div>
               <div className="preview-modal__body table-preview__body">
-                <div className="table-preview__meta">Rows: {tablePreviewTable.rows.length} · Columns: {tablePreviewTable.columns.length}</div>
+                <div className="table-preview__meta">
+                  Rows: {tablePreviewTable.rows.length} · Columns: {tablePreviewColumns.length}
+                  {tablePreviewHasTransforms && (
+                    <span className="table-preview__transform-badge">
+                      {columnSplits.filter((s) => s.tableId === tablePreviewTable.id).length > 0 && <span>✂ {columnSplits.filter((s) => s.tableId === tablePreviewTable.id).length} split(s)</span>}
+                      {tablePivots.filter((p) => p.tableId === tablePreviewTable.id).length > 0 && <span>⟳ {tablePivots.filter((p) => p.tableId === tablePreviewTable.id).length} pivot(s)</span>}
+                    </span>
+                  )}
+                </div>
                 <div className="table-preview__table-wrapper">
                   <table className="table-preview__table">
                     <thead>
                       <tr>
-                        {tablePreviewTable.columns.map((c) => (
+                        {tablePreviewColumns.map((c) => (
                           <th key={c}>{c}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {tablePreviewTable.rows.slice(0, 50).map((row, idx) => (
+                      {tablePreviewRows.slice(0, 50).map((row, idx) => (
                         <tr key={idx}>
-                          {tablePreviewTable.columns.map((c) => (
-                            <td key={c}>{String((row as any)[c] ?? '')}</td>
-                          ))}
+                          {tablePreviewColumns.map((c) => {
+                            const val = (row as any)[c]
+                            const display = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : String(val ?? '')
+                            return <td key={c} title={display}>{display}</td>
+                          })}
                         </tr>
                       ))}
                     </tbody>
@@ -1225,6 +1298,26 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
               {table?.originalName && table.originalName !== table.name && (
                 <button onClick={() => { handleResetTableName(contextMenu.tableId); closeContextMenu() }}>Reset name</button>
               )}
+              <button onClick={() => {
+                const arrayName = prompt('Array property name for pivoted columns (e.g. "Items")')?.trim()
+                if (!arrayName) { closeContextMenu(); return }
+                const patternsRaw = prompt('Column prefixes to group (comma-separated, e.g. "Item,Fact")')?.trim()
+                if (!patternsRaw) { closeContextMenu(); return }
+                const patterns = patternsRaw.split(',').map((s) => s.trim()).filter(Boolean)
+                if (!patterns.length) { closeContextMenu(); return }
+                const groups = patterns.map((p) => ({ pattern: p, propertyName: p }))
+                setTablePivots((prev) => {
+                  const filtered = prev.filter((pv) => !(pv.tableId === contextMenu.tableId && pv.arrayName === arrayName))
+                  return [...filtered, { tableId: contextMenu.tableId, arrayName, groups }]
+                })
+                closeContextMenu()
+              }}>Pivot</button>
+              {tablePivots.some((pv) => pv.tableId === contextMenu.tableId) && (
+                <button onClick={() => {
+                  setTablePivots((prev) => prev.filter((pv) => pv.tableId !== contextMenu.tableId))
+                  closeContextMenu()
+                }}>Remove Pivots</button>
+              )}
               <button onClick={() => { handleDeleteTable(contextMenu.tableId); closeContextMenu() }}>Delete</button>
               {isDelimited && (
                 <>
@@ -1274,28 +1367,132 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
               {original !== contextMenu.column && (
                 <button onClick={() => { handleResetColumnName(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Reset name</button>
               )}
+              <button onClick={() => {
+                const delim = prompt('Split delimiter (e.g. "," or "|" or ";")')?.trim()
+                if (!delim) { closeContextMenu(); return }
+                setColumnSplits((prev) => {
+                  const filtered = prev.filter((s) => !(s.tableId === contextMenu.tableId && s.column === contextMenu.column))
+                  return [...filtered, { tableId: contextMenu.tableId, column: contextMenu.column, delimiter: delim }]
+                })
+                closeContextMenu()
+              }}>Split</button>
+              {columnSplits.some((s) => s.tableId === contextMenu.tableId && s.column === contextMenu.column) && (
+                <button onClick={() => {
+                  setColumnSplits((prev) => prev.filter((s) => !(s.tableId === contextMenu.tableId && s.column === contextMenu.column)))
+                  closeContextMenu()
+                }}>Remove Split</button>
+              )}
               <button onClick={() => { handleDeleteColumn(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Delete</button>
               <button onClick={closeContextMenu}>Close</button>
             </div>
           )
         })()}
-        {contextMenu && contextMenu.type === 'edge' && (
-          <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
-            <h4>Relationship</h4>
-            <label>
-              Type
-              <select
-                value={edgeTypes[contextMenu.edgeId] ?? 'one-to-many'}
-                onChange={(e) => setEdgeTypes((prev) => ({ ...prev, [contextMenu.edgeId]: e.target.value as any }))}
-              >
-                <option value="one-to-many">1:* (array)</option>
-                <option value="one-to-one">1:1 (object)</option>
-              </select>
-            </label>
-            <button onClick={() => handleDeleteEdge(contextMenu.edgeId)}>Delete</button>
-            <button onClick={closeContextMenu}>Close</button>
-          </div>
-        )}
+        {contextMenu && contextMenu.type === 'edge' && (() => {
+          const edge = edges.find((e) => e.id === contextMenu.edgeId)
+          const childTableId = edge ? edge.target : ''
+          const parentTableId = edge ? edge.source : ''
+          const childTable = tables.find((t) => t.id === childTableId)
+          const parentTable = tables.find((t) => t.id === parentTableId)
+          const childColumns = childTable?.columns ?? []
+          const currentFilter = edgeColumnFilters[contextMenu.edgeId]
+          const isRecursive = childTableId === parentTableId
+          return (
+            <div className="context-menu context-menu--wide" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+              <h4>Relationship</h4>
+              <div className="context-menu__edge-label">
+                {parentTable?.name ?? parentTableId}.{edge?.sourceHandle} → {childTable?.name ?? childTableId}.{edge?.targetHandle}
+              </div>
+              <label>
+                Type
+                <select
+                  value={edgeTypes[contextMenu.edgeId] ?? 'one-to-many'}
+                  onChange={(e) => setEdgeTypes((prev) => ({ ...prev, [contextMenu.edgeId]: e.target.value as any }))}
+                >
+                  <option value="one-to-many">1:* (array)</option>
+                  <option value="one-to-one">1:1 (object)</option>
+                </select>
+              </label>
+              <label>
+                Property name
+                <input
+                  type="text"
+                  value={edgePropertyNames[contextMenu.edgeId] ?? ''}
+                  placeholder={childTable?.name ?? 'auto'}
+                  onChange={(e) => {
+                    const v = e.target.value.trim()
+                    setEdgePropertyNames((prev) => {
+                      if (!v) {
+                        const next = { ...prev }
+                        delete next[contextMenu.edgeId]
+                        return next
+                      }
+                      return { ...prev, [contextMenu.edgeId]: v }
+                    })
+                  }}
+                />
+              </label>
+              {(isRecursive || childTableId !== parentTableId) && (
+                <label>
+                  Max depth{isRecursive ? ' (recursive)' : ''}
+                  <input
+                    type="number"
+                    min={0}
+                    value={edgeMaxDepth[contextMenu.edgeId] ?? (isRecursive ? 0 : '')}
+                    placeholder={isRecursive ? '0 (blocked)' : 'unlimited'}
+                    onChange={(e) => {
+                      const v = e.target.value === '' ? undefined : Number(e.target.value)
+                      setEdgeMaxDepth((prev) => {
+                        const next = { ...prev }
+                        if (v === undefined) delete next[contextMenu.edgeId]
+                        else next[contextMenu.edgeId] = Math.max(0, v)
+                        return next
+                      })
+                    }}
+                  />
+                </label>
+              )}
+              <div className="context-menu__columns-section">
+                <h5>Included columns ({childTable?.name})</h5>
+                <div className="context-menu__column-actions">
+                  <button onClick={() => setEdgeColumnFilters((prev) => ({ ...prev, [contextMenu.edgeId]: [...childColumns] }))}>All</button>
+                  <button onClick={() => setEdgeColumnFilters((prev) => ({ ...prev, [contextMenu.edgeId]: [] }))}>None</button>
+                  <button onClick={() => {
+                    const next = { ...edgeColumnFilters }
+                    delete next[contextMenu.edgeId]
+                    setEdgeColumnFilters(next)
+                  }}>Reset</button>
+                </div>
+                <ul className="context-menu__column-list">
+                  {childColumns.map((col) => {
+                    const checked = !currentFilter || currentFilter.includes(col)
+                    return (
+                      <li key={col}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setEdgeColumnFilters((prev) => {
+                                const existing = prev[contextMenu.edgeId] ?? [...childColumns]
+                                const next = checked
+                                  ? existing.filter((c) => c !== col)
+                                  : [...existing, col]
+                                return { ...prev, [contextMenu.edgeId]: next }
+                              })
+                            }}
+                          />
+                          {col}
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+              <button onClick={() => handleDeleteEdge(contextMenu.edgeId)}>Delete</button>
+              <button onClick={closeContextMenu}>Close</button>
+            </div>
+          )
+        })()}
       </main>
     </div>
   </div>
