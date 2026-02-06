@@ -1,5 +1,6 @@
 import type { Edge } from 'reactflow'
 import type { TableData, RelationshipEdge } from './types'
+import { applyTransforms, type ColumnSplit, type TablePivot } from './transforms'
 
 export function toRelationshipEdges(edges: Edge[], edgeTypes?: Record<string, 'one-to-many' | 'one-to-one'>): RelationshipEdge[] {
   return edges
@@ -18,7 +19,11 @@ export function buildJoinedDocument(
   leadRowIndex: number,
   tables: TableData[],
   relationships: RelationshipEdge[],
-  options?: { columnsFilter?: Record<string, string[]> },
+  options?: {
+    columnsFilter?: Record<string, string[]>
+    columnSplits?: ColumnSplit[]
+    tablePivots?: TablePivot[]
+  },
 ) {
   const tableMap = new Map<string, TableData>(tables.map((t) => [t.id, t]))
   const leadTable = tableMap.get(leadTableId)
@@ -27,6 +32,8 @@ export function buildJoinedDocument(
   if (!leadRow) throw new Error(`Lead row not found index=${leadRowIndex}`)
 
   const columnsFilter = options?.columnsFilter
+  const columnSplits = options?.columnSplits ?? []
+  const tablePivots = options?.tablePivots ?? []
   const visited = new Set<string>() // tableId:rowIndex
 
   const rowKey = (tableId: string, row: Record<string, any>) => {
@@ -48,11 +55,18 @@ export function buildJoinedDocument(
 
   const projectRow = (tableId: string, row: Record<string, any>) => {
     const cols = columnsFilter?.[tableId]
-    if (!cols || !cols.length) return { ...row }
-    return cols.reduce((acc, key) => {
-      if (key in row) acc[key] = row[key]
-      return acc
-    }, {} as Record<string, any>)
+    let out: Record<string, any>
+    if (!cols || !cols.length) {
+      out = { ...row }
+    } else {
+      out = cols.reduce((acc, key) => {
+        if (key in row) acc[key] = row[key]
+        return acc
+      }, {} as Record<string, any>)
+    }
+    const table = tableMap.get(tableId)
+    const allColumns = table?.columns ?? Object.keys(row)
+    return applyTransforms(out, tableId, allColumns, columnSplits, tablePivots)
   }
 
   function buildNested(tableId: string, row: Record<string, any>, parentId?: string): Record<string, any> {

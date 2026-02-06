@@ -773,6 +773,32 @@
 .table-preview__meta {
   font-size: 0.85rem;
   color: #555;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.table-preview__transform-badge {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.table-preview__transform-badge > span {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+}
+
+.table-preview__table td {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .table-preview__table-wrapper {

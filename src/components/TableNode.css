@@ -18,6 +18,13 @@
   gap: 0.5rem;
 }
 
+.table-node__badges {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .table-node--root {
   border: 2px solid #4f46e5;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
@@ -34,6 +41,18 @@
 
 .table-node__badge--doc {
   background: #2b6cb0;
+}
+
+.table-node__badge--pivot {
+  background: #d97706;
+}
+
+.table-node__col-icon {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  flex-shrink: 0;
+  margin-left: auto;
+  cursor: default;
 }
 
 .table-node--docroot {

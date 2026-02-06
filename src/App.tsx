@@ -36,6 +36,7 @@ import { saveAs } from 'file-saver'
 import TableNode, { type TableNodeData } from './components/TableNode'
 import JsonTree from './components/JsonTree'
 import { estimateRu, type RuEstimate } from './lib/ru'
+import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transforms'
 import logoUrl from './assets/logo.svg'
 
 const nodeTypes = { tableNode: TableNode }
@@ -55,6 +56,8 @@ function App() {
   const [tableParsingOptions, setTableParsingOptions] = useState<Record<string, { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }>>({})
   const [tableRenames, setTableRenames] = useState<Record<string, string>>({})
   const [columnRenames, setColumnRenames] = useState<Record<string, Record<string, string>>>({})
+  const [columnSplits, setColumnSplits] = useState<ColumnSplit[]>([])
+  const [tablePivots, setTablePivots] = useState<TablePivot[]>([])
   const [contextMenu, setContextMenu] = useState<
     | { type: 'table'; x: number; y: number; tableId: string }
     | { type: 'column'; x: number; y: number; tableId: string; column: string }
@@ -74,6 +77,7 @@ function App() {
   const [tablePreviewOpen, setTablePreviewOpen] = useState(false)
   const [selectedError, setSelectedError] = useState<ParseFileError | null>(null)
   const [tablePreviewTableId, setTablePreviewTableId] = useState<string | null>(null)
+  const [tablePreviewTransformed, setTablePreviewTransformed] = useState(true)
   const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'help' | null>(null)
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -146,6 +150,8 @@ function App() {
         setTableParsingOptions(parsedOpts)
         setTableRenames(state.tableRenames ?? {})
         setColumnRenames(state.columnRenames ?? {})
+        setColumnSplits((state as any).columnSplits ?? [])
+        setTablePivots((state as any).tablePivots ?? [])
         setDocumentRootIds(state.documentRootIds ?? (applied.tablesOut[0] ? [applied.tablesOut[0].id] : []))
         setSqlSchemaSource(state.sqlSchemaText ?? '')
       })
@@ -160,6 +166,8 @@ function App() {
       setExpandedTables({})
       setTableParsingOptions({})
       setDocumentRootIds([])
+      setColumnSplits([])
+      setTablePivots([])
     }
     setHydrated(true)
   }, [projectId])
@@ -188,9 +196,11 @@ function App() {
       columnRenames,
       documentRootIds,
       sqlSchemaText: sqlSchemaSource,
-    })
+      columnSplits,
+      tablePivots,
+    } as any)
     setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
-  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds])
+  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots])
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const { tables: parsed, errors } = await parseFiles(files)
     setErrors(errors)
@@ -244,9 +254,40 @@ function App() {
 
   const tablePreviewTable = useMemo(() => tables.find((t) => t.id === tablePreviewTableId) ?? null, [tables, tablePreviewTableId])
 
+  const tablePreviewHasTransforms = useMemo(() => {
+    if (!tablePreviewTableId) return false
+    return columnSplits.some((s) => s.tableId === tablePreviewTableId) || tablePivots.some((p) => p.tableId === tablePreviewTableId)
+  }, [tablePreviewTableId, columnSplits, tablePivots])
+
+  const tablePreviewRows = useMemo(() => {
+    if (!tablePreviewTable) return []
+    if (!tablePreviewTransformed || !tablePreviewHasTransforms) return tablePreviewTable.rows
+    return tablePreviewTable.rows.map((row) =>
+      applyTransforms(row, tablePreviewTable.id, tablePreviewTable.columns, columnSplits, tablePivots),
+    )
+  }, [tablePreviewTable, tablePreviewTransformed, tablePreviewHasTransforms, columnSplits, tablePivots])
+
+  const tablePreviewColumns = useMemo(() => {
+    if (!tablePreviewTable) return []
+    if (!tablePreviewTransformed || !tablePreviewHasTransforms || !tablePreviewRows.length) return tablePreviewTable.columns
+    // Derive columns from first transformed row (pivot may add/remove columns)
+    const seen = new Set<string>()
+    const cols: string[] = []
+    for (const row of tablePreviewRows.slice(0, 10)) {
+      for (const key of Object.keys(row)) {
+        if (!seen.has(key)) { seen.add(key); cols.push(key) }
+      }
+    }
+    return cols
+  }, [tablePreviewTable, tablePreviewTransformed, tablePreviewHasTransforms, tablePreviewRows])
+
   useEffect(() => {
-    setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id) } })))
-  }, [rootTableId, documentRootIds])
+    setNodes((prev) => prev.map((n) => {
+      const splitCols = new Set(columnSplits.filter((s) => s.tableId === n.id).map((s) => s.column))
+      const hasPivot = tablePivots.some((p) => p.tableId === n.id)
+      return { ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id), splitColumns: splitCols, hasPivot } }
+    }))
+  }, [rootTableId, documentRootIds, columnSplits, tablePivots])
 
   const relationshipsSummaries = useMemo(() => {
     return edges.map((e) => {
@@ -518,6 +559,8 @@ function App() {
     try {
       const doc = buildJoinedDocument(rootTableId, leadRowIndex, tables, toRelationshipEdges(edges, edgeTypes), {
         columnsFilter: selectedColumns,
+        columnSplits,
+        tablePivots,
       })
       setPreviewData(doc)
       setPreviewRu(estimateRu(doc))
@@ -530,7 +573,7 @@ function App() {
       setPreviewRu(null)
       setPreviewMode('raw')
     }
-  }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns])
+  }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots])
 
   const handleDownload = useCallback(async () => {
     if (!tables.length) return
@@ -545,6 +588,8 @@ function App() {
       lead.rows.forEach((_, idx) => {
         const doc = buildJoinedDocument(lead.id, idx, tables, relationships, {
           columnsFilter: selectedColumns,
+          columnSplits,
+          tablePivots,
         })
         folder.file(`${lead.name}_${idx}.json`, JSON.stringify(doc, null, 2))
       })
@@ -552,7 +597,7 @@ function App() {
     const blob = await zip.generateAsync({ type: 'blob' })
     const name = roots.length === 1 ? (tables.find((t) => t.id === roots[0])?.name ?? 'documents') : 'documents'
     saveAs(blob, `${name}_export.zip`)
-  }, [rootTableId, documentRootIds, tables, edges, edgeTypes, selectedColumns])
+  }, [rootTableId, documentRootIds, tables, edges, edgeTypes, selectedColumns, columnSplits, tablePivots])
 
   const applyParsingOptions = useCallback(async (
     tablesInput: TableData[],
@@ -1024,26 +1069,42 @@ function App() {
               <div className="preview-modal__header">
                 <h3>Table: {tablePreviewTable.name}</h3>
                 <div className="preview-modal__actions">
+                  {tablePreviewHasTransforms && (
+                    <div className="preview-modal__mode">
+                      <button className={tablePreviewTransformed ? 'active' : ''} onClick={() => setTablePreviewTransformed(true)}>Transformed</button>
+                      <button className={!tablePreviewTransformed ? 'active' : ''} onClick={() => setTablePreviewTransformed(false)}>Original</button>
+                    </div>
+                  )}
                   <button onClick={() => setTablePreviewOpen(false)}>Close</button>
                 </div>
               </div>
               <div className="preview-modal__body table-preview__body">
-                <div className="table-preview__meta">Rows: {tablePreviewTable.rows.length} · Columns: {tablePreviewTable.columns.length}</div>
+                <div className="table-preview__meta">
+                  Rows: {tablePreviewTable.rows.length} · Columns: {tablePreviewColumns.length}
+                  {tablePreviewHasTransforms && (
+                    <span className="table-preview__transform-badge">
+                      {columnSplits.filter((s) => s.tableId === tablePreviewTable.id).length > 0 && <span>✂ {columnSplits.filter((s) => s.tableId === tablePreviewTable.id).length} split(s)</span>}
+                      {tablePivots.filter((p) => p.tableId === tablePreviewTable.id).length > 0 && <span>⟳ {tablePivots.filter((p) => p.tableId === tablePreviewTable.id).length} pivot(s)</span>}
+                    </span>
+                  )}
+                </div>
                 <div className="table-preview__table-wrapper">
                   <table className="table-preview__table">
                     <thead>
                       <tr>
-                        {tablePreviewTable.columns.map((c) => (
+                        {tablePreviewColumns.map((c) => (
                           <th key={c}>{c}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {tablePreviewTable.rows.slice(0, 50).map((row, idx) => (
+                      {tablePreviewRows.slice(0, 50).map((row, idx) => (
                         <tr key={idx}>
-                          {tablePreviewTable.columns.map((c) => (
-                            <td key={c}>{String((row as any)[c] ?? '')}</td>
-                          ))}
+                          {tablePreviewColumns.map((c) => {
+                            const val = (row as any)[c]
+                            const display = (typeof val === 'object' && val !== null) ? JSON.stringify(val) : String(val ?? '')
+                            return <td key={c} title={display}>{display}</td>
+                          })}
                         </tr>
                       ))}
                     </tbody>
@@ -1225,6 +1286,26 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
               {table?.originalName && table.originalName !== table.name && (
                 <button onClick={() => { handleResetTableName(contextMenu.tableId); closeContextMenu() }}>Reset name</button>
               )}
+              <button onClick={() => {
+                const arrayName = prompt('Array property name for pivoted columns (e.g. "Items")')?.trim()
+                if (!arrayName) { closeContextMenu(); return }
+                const patternsRaw = prompt('Column prefixes to group (comma-separated, e.g. "Item,Fact")')?.trim()
+                if (!patternsRaw) { closeContextMenu(); return }
+                const patterns = patternsRaw.split(',').map((s) => s.trim()).filter(Boolean)
+                if (!patterns.length) { closeContextMenu(); return }
+                const groups = patterns.map((p) => ({ pattern: p, propertyName: p }))
+                setTablePivots((prev) => {
+                  const filtered = prev.filter((pv) => !(pv.tableId === contextMenu.tableId && pv.arrayName === arrayName))
+                  return [...filtered, { tableId: contextMenu.tableId, arrayName, groups }]
+                })
+                closeContextMenu()
+              }}>Pivot</button>
+              {tablePivots.some((pv) => pv.tableId === contextMenu.tableId) && (
+                <button onClick={() => {
+                  setTablePivots((prev) => prev.filter((pv) => pv.tableId !== contextMenu.tableId))
+                  closeContextMenu()
+                }}>Remove Pivots</button>
+              )}
               <button onClick={() => { handleDeleteTable(contextMenu.tableId); closeContextMenu() }}>Delete</button>
               {isDelimited && (
                 <>
@@ -1273,6 +1354,21 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
               <button onClick={() => { handleRenameColumn(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Rename</button>
               {original !== contextMenu.column && (
                 <button onClick={() => { handleResetColumnName(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Reset name</button>
+              )}
+              <button onClick={() => {
+                const delim = prompt('Split delimiter (e.g. "," or "|" or ";")')?.trim()
+                if (!delim) { closeContextMenu(); return }
+                setColumnSplits((prev) => {
+                  const filtered = prev.filter((s) => !(s.tableId === contextMenu.tableId && s.column === contextMenu.column))
+                  return [...filtered, { tableId: contextMenu.tableId, column: contextMenu.column, delimiter: delim }]
+                })
+                closeContextMenu()
+              }}>Split</button>
+              {columnSplits.some((s) => s.tableId === contextMenu.tableId && s.column === contextMenu.column) && (
+                <button onClick={() => {
+                  setColumnSplits((prev) => prev.filter((s) => !(s.tableId === contextMenu.tableId && s.column === contextMenu.column)))
+                  closeContextMenu()
+                }}>Remove Split</button>
               )}
               <button onClick={() => { handleDeleteColumn(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Delete</button>
               <button onClick={closeContextMenu}>Close</button>
