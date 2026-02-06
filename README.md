@@ -3,7 +3,7 @@
 Visualize, relate, and export data from CSV/TSV/TXT/JSON/JSONL files or archives (ZIP/TAR/TGZ, nested archives supported) as merged JSON documents. Delete tables to prune your model.
 
 ## ✨ Features
-- Upload multiple files (directory selection & drag/drop) or add files incrementally; supports CSV/TSV/TXT/JSON/JSONL plus ZIP/TAR/GZ/TGZ archives (nested archives); metadata persists in LocalStorage, sources in IndexedDB; per-table parsing options (delimiter, skip rows); **rename tables and columns with relationship preservation**
+- Upload multiple files (directory selection & drag/drop) or add files incrementally; supports CSV/TSV/TXT/JSON/JSONL plus ZIP/TAR/GZ/TGZ archives (nested archives) and **SQL Server schema paste import**; metadata persists in LocalStorage, sources in IndexedDB; per-table parsing options (delimiter, skip rows); **multiple document roots**; **rename tables and columns with relationship preservation**
 - Auto-infer table schemas (table name from filename, columns from headers/keys)
 - Canvas with column-level connectors (React Flow)
 - Delete tables and relationships

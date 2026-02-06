@@ -10,6 +10,9 @@ export interface TableData {
   sourceType?: string
   originalName?: string
   columnRenames?: Record<string, string> // original -> current
+  isDocumentRoot?: boolean
+  primaryKeys?: string[]
+  columnTypes?: Record<string, { dataType?: string; isPrimaryKey?: boolean }>
 }
 
 export interface ParseFileError {

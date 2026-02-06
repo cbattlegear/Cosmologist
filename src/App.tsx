@@ -23,6 +23,8 @@ import { removeEdge } from './lib/removeEdge'
 import 'reactflow/dist/style.css'
 import './App.css'
 import { parseFiles, detectDelimiter, parseDelimitedText } from './lib/parseFiles'
+import { parseSqlServerSchema } from './lib/parseSqlSchema'
+import { generateDummyRowsForSchema } from './lib/dummyData'
 import { buildJoinedDocument, toRelationshipEdges } from './lib/join'
 import { removeTable } from './lib/removeTable'
 import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, renameProject } from './lib/projects'
@@ -45,6 +47,7 @@ function App() {
   const [edges, setEdges] = useState<Edge[]>([])
   const [errors, setErrors] = useState<ParseFileError[]>([])
   const [rootTableId, setRootTableId] = useState('')
+  const [documentRootIds, setDocumentRootIds] = useState<string[]>([])
   const [leadRowIndex, setLeadRowIndex] = useState(0)
   const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({})
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({})
@@ -73,6 +76,9 @@ function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [dragOverlay, setDragOverlay] = useState(false)
+  const [sqlSchemaModalOpen, setSqlSchemaModalOpen] = useState(false)
+  const [sqlSchemaText, setSqlSchemaText] = useState('')
+  const [sqlSchemaSource, setSqlSchemaSource] = useState('')
 
   const loadInputRef = useRef<HTMLInputElement>(null)
   const addInputRef = useRef<HTMLInputElement>(null)
@@ -130,6 +136,8 @@ function App() {
         setTableParsingOptions(parsedOpts)
         setTableRenames(state.tableRenames ?? {})
         setColumnRenames(state.columnRenames ?? {})
+        setDocumentRootIds(state.documentRootIds ?? (applied.tablesOut[0] ? [applied.tablesOut[0].id] : []))
+        setSqlSchemaSource(state.sqlSchemaText ?? '')
       })
     } else {
       setTables([])
@@ -141,6 +149,7 @@ function App() {
       setSelectedColumns({})
       setExpandedTables({})
       setTableParsingOptions({})
+      setDocumentRootIds([])
     }
     setHydrated(true)
   }, [projectId])
@@ -167,14 +176,16 @@ function App() {
       edgeTypes,
       tableRenames,
       columnRenames,
+      documentRootIds,
+      sqlSchemaText: sqlSchemaSource,
     })
     setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
-  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes])
-
+  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds])
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const { tables: parsed, errors } = await parseFiles(files)
     setErrors(errors)
     setTables(parsed)
+    setDocumentRootIds(parsed.filter((t) => t.isDocumentRoot).map((t) => t.id) ?? (parsed[0] ? [parsed[0].id] : []))
     const computedNodes = parsed.map((table, idx) => ({
       id: table.id,
       type: 'tableNode',
@@ -224,8 +235,8 @@ function App() {
   const tablePreviewTable = useMemo(() => tables.find((t) => t.id === tablePreviewTableId) ?? null, [tables, tablePreviewTableId])
 
   useEffect(() => {
-    setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, isRoot: n.id === rootTableId } })))
-  }, [rootTableId])
+    setNodes((prev) => prev.map((n) => ({ ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id) } })))
+  }, [rootTableId, documentRootIds])
 
   const relationshipsSummaries = useMemo(() => {
     return edges.map((e) => {
@@ -332,6 +343,46 @@ function App() {
     setSelectedError(null)
   }, [])
 
+  const applyParsedTablesAndEdges = useCallback((tablesIn: TableData[], edgesIn: Edge[], sqlSchema?: string) => {
+    const withDummy = tablesIn.some((t) => t.sourceType === 'sqlschema')
+      ? generateDummyRowsForSchema(tablesIn, edgesIn, 10)
+      : tablesIn
+    if (sqlSchema) setSqlSchemaSource(sqlSchema)
+    setTables(withDummy)
+    setDocumentRootIds((prev) => (prev.length ? prev : (withDummy.filter((t) => t.isDocumentRoot).map((t) => t.id) ?? (withDummy[0] ? [withDummy[0].id] : []))))
+    const computedNodes = tablesIn.map((table, idx) => ({
+      id: table.id,
+      type: 'tableNode',
+      position: {
+        x: 120 + (idx % 3) * 320,
+        y: 80 + Math.floor(idx / 3) * 260,
+      },
+      data: { table, isRoot: idx === 0, onColumnContextMenu },
+    }))
+    setNodes(computedNodes)
+    setEdges(edgesIn)
+    const selection: Record<string, string[]> = {}
+    const expanded: Record<string, boolean> = {}
+    tablesIn.forEach((t) => { selection[t.id] = [...t.columns]; expanded[t.id] = false })
+    setSelectedColumns(selection)
+    setExpandedTables(expanded)
+    if (tablesIn[0]) {
+      setRootTableId(tablesIn[0].id)
+      setLeadRowIndex(0)
+    }
+  }, [onColumnContextMenu])
+
+  const handleSqlSchemaParse = useCallback(() => {
+    const { tables: parsedTables, edges: parsedEdges, errors: parseErrors } = parseSqlServerSchema(sqlSchemaText)
+    if (parseErrors.length) {
+      setErrors(parseErrors)
+      return
+    }
+    applyParsedTablesAndEdges(parsedTables, parsedEdges, sqlSchemaText)
+    setSqlSchemaModalOpen(false)
+    setSqlSchemaText('')
+  }, [sqlSchemaText, applyParsedTablesAndEdges])
+
   const handleRenameTable = useCallback((tableId: string) => {
     const table = tablesRef.current.find((t) => t.id === tableId)
     if (!table) return
@@ -380,6 +431,18 @@ function App() {
     }))
   }, [pushError])
 
+  const toggleDocumentRoot = useCallback((tableId: string) => {
+    setDocumentRootIds((prev) => {
+      const exists = prev.includes(tableId)
+      let next = exists ? prev.filter((id) => id !== tableId) : [...prev, tableId]
+      if (!next.length) {
+        if (rootTableId) next = [rootTableId]
+        else if (tablesRef.current[0]) next = [tablesRef.current[0].id]
+      }
+      return next
+    })
+  }, [rootTableId])
+
   const handleResetColumnName = useCallback((tableId: string, current: string) => {
     const table = tablesRef.current.find((t) => t.id === tableId)
     if (!table) return
@@ -411,20 +474,26 @@ function App() {
   }, [rootTableId, leadRowIndex, tables, edges, edgeTypes, selectedColumns])
 
   const handleDownload = useCallback(async () => {
-    if (!rootTableId || !tables.length) return
-    const lead = tables.find((t) => t.id === rootTableId)
-    if (!lead) return
+    if (!tables.length) return
+    const roots = documentRootIds.length ? documentRootIds : (rootTableId ? [rootTableId] : [])
+    if (!roots.length) return
     const relationships = toRelationshipEdges(edges, edgeTypes)
     const zip = new JSZip()
-    lead.rows.forEach((_, idx) => {
-      const doc = buildJoinedDocument(rootTableId, idx, tables, relationships, {
-        columnsFilter: selectedColumns,
+    roots.forEach((rid) => {
+      const lead = tables.find((t) => t.id === rid)
+      if (!lead) return
+      const folder = zip.folder(lead.name) ?? zip
+      lead.rows.forEach((_, idx) => {
+        const doc = buildJoinedDocument(lead.id, idx, tables, relationships, {
+          columnsFilter: selectedColumns,
+        })
+        folder.file(`${lead.name}_${idx}.json`, JSON.stringify(doc, null, 2))
       })
-      zip.file(`${lead.name}_${idx}.json`, JSON.stringify(doc, null, 2))
     })
     const blob = await zip.generateAsync({ type: 'blob' })
-    saveAs(blob, `${lead.name}_export.zip`)
-  }, [rootTableId, tables, edges, edgeTypes, selectedColumns])
+    const name = roots.length === 1 ? (tables.find((t) => t.id === roots[0])?.name ?? 'documents') : 'documents'
+    saveAs(blob, `${name}_export.zip`)
+  }, [rootTableId, documentRootIds, tables, edges, edgeTypes, selectedColumns])
 
   const applyParsingOptions = useCallback(async (
     tablesInput: TableData[],
@@ -577,6 +646,7 @@ function App() {
   }, [closeMenus])
 
   const handleDeleteTable = useCallback((id: string) => {
+    setDocumentRootIds((prev) => prev.filter((i) => i !== id))
     setTables((prevTables) => {
       const { tables: nt, nodes: nn, edges: ne, rootTableId: newRoot } = removeTable(id, prevTables, nodesRef.current, edgesRef.current)
       setNodes(nn)
@@ -641,6 +711,7 @@ function App() {
               <div className="menu-dropdown" role="menu">
                 <button onClick={triggerLoadFiles}>Load dataset(s)</button>
                 <button onClick={triggerAddFiles}>Add file(s)</button>
+                <button onClick={() => { setSqlSchemaModalOpen(true); closeMenus() }}>Load SQL Server Schema</button>
               </div>
             )}
           </div>
@@ -701,6 +772,9 @@ function App() {
                       {t.id === rootTableId && <span className="table-item__root">Root</span>}
                     </button>
                     <div className="table-item__actions">
+                      <button className={['table-item__docroot', documentRootIds.includes(t.id) ? 'active' : ''].join(' ')} onClick={() => toggleDocumentRoot(t.id)} aria-label={`Toggle document root for ${t.name}`}>
+                        📄
+                      </button>
                       <button className="table-item__rename" onClick={() => handleRenameTable(t.id)} aria-label={`Rename ${t.name}`}>✎</button>
                       {t.originalName && t.originalName !== t.name && (
                         <button className="table-item__reset" onClick={() => handleResetTableName(t.id)} aria-label={`Reset ${t.name}`}>
@@ -769,7 +843,7 @@ function App() {
 
         <section className="controls">
           <h2>Preview</h2>
-          <select value={rootTableId} onChange={(e) => setRootTableId(e.target.value)} disabled={!tables.length}>
+          <select value={rootTableId} onChange={(e) => { setRootTableId(e.target.value); setDocumentRootIds((prev) => prev.length ? prev : [e.target.value]) }} disabled={!tables.length}>
             {tables.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -941,7 +1015,7 @@ function App() {
                 <ul>
                   <li>File → New/Open/Manage projects</li>
                   <li>Load Data → Load dataset(s) or Add file(s)</li>
-                  <li>Supports CSV, TSV, TXT, JSON, JSONL, ZIP, TAR, GZ/TGZ (nested archives).</li>
+                  <li>Supports CSV, TSV, TXT, JSON, JSONL, ZIP, TAR, GZ/TGZ (nested archives), SQL Server schema paste, and multiple document roots.</li>
                   <li>Drag relations between tables to build hierarchy; right-click edges to set 1:1 or 1:*.</li>
                   <li>Select root table and row index, then Generate Preview or Download ZIP.</li>
                 </ul>
@@ -961,6 +1035,79 @@ function App() {
                 <p><strong>Cosmologist</strong></p>
                 <p>Version: {VERSION}</p>
                 <p>Author: {AUTHOR}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sqlSchemaModalOpen && (
+          <div className="modal" onClick={() => setSqlSchemaModalOpen(false)}>
+            <div className="modal__content modal__content--wide" onClick={(e) => e.stopPropagation()}>
+              <div className="modal__header">
+                <h3>Load SQL Server Schema</h3>
+                <button onClick={() => setSqlSchemaModalOpen(false)}>Close</button>
+              </div>
+              <div className="modal__body">
+                <p>Paste the tab-delimited schema dump (including header).</p>
+                <details className="sql-schema-help">
+                  <summary>How to export from SSMS (SQL Server)</summary>
+                  <ol>
+                    <li>Open a <strong>New Query</strong> window in SQL Server Management Studio.</li>
+                    <li>Run the query below.</li>
+                    <li>In the results grid, click the top-left corner to select all rows.</li>
+                    <li>Right-click → <strong>Copy with Headers</strong>.</li>
+                    <li>Paste into the textbox below.</li>
+                  </ol>
+                  <pre className="sql-schema-query"><code>{`SELECT 
+    s.name AS [table_schema],
+    t.name AS [table_name],
+    c.name AS [column_name],
+    c.column_id AS [ordinal_position],
+    ty.name AS [data_type],
+    c.max_length,
+    c.precision,
+    c.scale,
+    c.is_nullable,
+    c.is_identity,
+    ISNULL(dc.definition, '') AS [default_value],
+    CASE WHEN pk_ic.column_id IS NOT NULL THEN 1 ELSE 0 END AS [is_primary_key],
+    fk.name AS [fk_name],
+    rs.name AS [fk_ref_schema],
+    rt.name AS [fk_ref_table],
+    rc.name AS [fk_ref_column]
+FROM sys.tables t
+INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN sys.columns c ON t.object_id = c.object_id
+INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+LEFT JOIN sys.key_constraints pk 
+    ON pk.parent_object_id = t.object_id AND pk.type = 'PK'
+LEFT JOIN sys.index_columns pk_ic 
+    ON pk.unique_index_id = pk_ic.index_id 
+    AND pk.parent_object_id = pk_ic.object_id 
+    AND c.column_id = pk_ic.column_id
+LEFT JOIN sys.foreign_key_columns fkc 
+    ON fkc.parent_object_id = t.object_id 
+    AND fkc.parent_column_id = c.column_id
+LEFT JOIN sys.foreign_keys fk 
+    ON fkc.constraint_object_id = fk.object_id
+LEFT JOIN sys.tables rt ON fkc.referenced_object_id = rt.object_id
+LEFT JOIN sys.schemas rs ON rt.schema_id = rs.schema_id
+LEFT JOIN sys.columns rc 
+    ON fkc.referenced_object_id = rc.object_id 
+    AND fkc.referenced_column_id = rc.column_id
+ORDER BY s.name, t.name, c.column_id;`}</code></pre>
+                </details>
+                <textarea
+                  className="sql-schema-input"
+                  value={sqlSchemaText}
+                  onChange={(e) => setSqlSchemaText(e.target.value)}
+                  rows={12}
+                  placeholder="table_schema\ttable_name\tcolumn_name\t..."
+                />
+              </div>
+              <div className="modal__footer">
+                <button onClick={handleSqlSchemaParse} disabled={!sqlSchemaText.trim()}>Parse & Load</button>
               </div>
             </div>
           </div>
