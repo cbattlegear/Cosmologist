@@ -28,6 +28,7 @@ import { removeTable } from './lib/removeTable'
 import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, renameProject } from './lib/projects'
 import { rehydrateTables } from './lib/rehydrate'
 import type { TableData, ParseFileError } from './lib/types'
+import { renameColumn as renameColumnData, renameTable as renameTableData, updateEdgesForColumnRename, renameSelectedColumns, ensureColumnRenames, findOriginalColumn, applyColumnRenames } from './lib/rename'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import TableNode, { type TableNodeData } from './components/TableNode'
@@ -48,9 +49,12 @@ function App() {
   const [selectedColumns, setSelectedColumns] = useState<Record<string, string[]>>({})
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({})
   const [tableParsingOptions, setTableParsingOptions] = useState<Record<string, { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }>>({})
+  const [tableRenames, setTableRenames] = useState<Record<string, string>>({})
+  const [columnRenames, setColumnRenames] = useState<Record<string, Record<string, string>>>({})
   const [contextMenu, setContextMenu] = useState<
     | { type: 'table'; x: number; y: number; tableId: string }
-    | { type:  'edge'; x: number; y: number; edgeId: string }
+    | { type: 'column'; x: number; y: number; tableId: string; column: string }
+    | { type: 'edge'; x: number; y: number; edgeId: string }
     | null
   >(null)
   const [edgeTypes, setEdgeTypes] = useState<Record<string, 'one-to-many' | 'one-to-one'>>({})
@@ -114,7 +118,7 @@ function App() {
             id: t.id,
             type: 'tableNode',
             position: state.nodePositions[t.id] ?? { x: 120 + (idx % 3) * 320, y: 80 + Math.floor(idx / 3) * 260 },
-            data: { table: t, isRoot: (state.rootTableId ?? applied.tablesOut[0]?.id) === t.id },
+            data: { table: t, isRoot: (state.rootTableId ?? applied.tablesOut[0]?.id) === t.id, onColumnContextMenu },
           })),
         )
         setEdges(applied.edgesOut)
@@ -124,6 +128,8 @@ function App() {
         setSelectedColumns(applied.selectedOut)
         setExpandedTables(state.expandedTables ?? {})
         setTableParsingOptions(parsedOpts)
+        setTableRenames(state.tableRenames ?? {})
+        setColumnRenames(state.columnRenames ?? {})
       })
     } else {
       setTables([])
@@ -159,6 +165,8 @@ function App() {
       expandedTables,
       tableParsingOptions,
       edgeTypes,
+      tableRenames,
+      columnRenames,
     })
     setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
   }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes])
@@ -174,7 +182,7 @@ function App() {
         x: 120 + (idx % 3) * 320,
         y: 80 + Math.floor(idx / 3) * 260,
       },
-      data: { table, isRoot: idx === 0 },
+      data: { table, isRoot: idx === 0, onColumnContextMenu },
     }))
     setNodes(computedNodes)
     setEdges([])
@@ -293,7 +301,22 @@ function App() {
     setContextMenu({ type: 'table', x: event.clientX, y: event.clientY, tableId: node.id })
   }, [])
 
+  const onColumnContextMenu = useCallback((tableId: string, column: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu({ type: 'column', x: event.clientX, y: event.clientY, tableId, column })
+  }, [])
+
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
+  const pushError = useCallback((message: string, detail?: string, fileName?: string) => {
+    setErrors((prev) => prev.concat({
+      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `err-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      message,
+      detail,
+      fileName,
+    }))
+  }, [])
 
   const handleErrorDismiss = useCallback((id: string) => {
     setErrors((prev) => prev.filter((e) => e.id !== id))
@@ -307,6 +330,70 @@ function App() {
   const clearErrors = useCallback(() => {
     setErrors([])
     setSelectedError(null)
+  }, [])
+
+  const handleRenameTable = useCallback((tableId: string) => {
+    const table = tablesRef.current.find((t) => t.id === tableId)
+    if (!table) return
+    const name = prompt('New table name?', table.name)?.trim()
+    if (!name || name === table.name) return
+    if (tablesRef.current.some((t) => t.id !== tableId && t.name === name)) {
+      pushError(`Table name '${name}' already exists`)
+      return
+    }
+    setTables((prev) => prev.map((t) => (t.id === tableId ? renameTableData(t, name) : t)))
+    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { ...n.data, table: { ...n.data.table, name } } } : n)))
+    setTableRenames((prev) => ({ ...prev, [tableId]: name }))
+  }, [pushError])
+
+  const handleResetTableName = useCallback((tableId: string) => {
+    const table = tablesRef.current.find((t) => t.id === tableId)
+    if (!table) return
+    const original = table.originalName ?? table.name
+    if (!original || original === table.name) return
+    setTables((prev) => prev.map((t) => (t.id === tableId ? renameTableData(t, original) : t)))
+    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { ...n.data, table: { ...n.data.table, name: original } } } : n)))
+    setTableRenames((prev) => {
+      const next = { ...prev }
+      delete next[tableId]
+      return next
+    })
+  }, [])
+
+  const handleRenameColumn = useCallback((tableId: string, current: string) => {
+    const table = tablesRef.current.find((t) => t.id === tableId)
+    if (!table) return
+    const next = prompt('New column name?', current)?.trim()
+    if (!next || next === current) return
+    if (table.columns.includes(next)) {
+      pushError(`Column name '${next}' already exists in ${table.name}`)
+      return
+    }
+    const columnRenamesMap = ensureColumnRenames(table)
+    const original = findOriginalColumn(columnRenamesMap, current) ?? current
+    setTables((prev) => prev.map((t) => (t.id === tableId ? renameColumnData(t, current, next) : t)))
+    setEdges((prev) => updateEdgesForColumnRename(prev, tableId, current, next))
+    setSelectedColumns((prev) => renameSelectedColumns(prev, tableId, current, next))
+    setColumnRenames((prev) => ({
+      ...prev,
+      [tableId]: { ...(prev[tableId] ?? {}), [original]: next },
+    }))
+  }, [pushError])
+
+  const handleResetColumnName = useCallback((tableId: string, current: string) => {
+    const table = tablesRef.current.find((t) => t.id === tableId)
+    if (!table) return
+    const renames = ensureColumnRenames(table)
+    const original = findOriginalColumn(renames, current) ?? current
+    if (original === current) return
+    // revert to original
+    setTables((prev) => prev.map((t) => (t.id === tableId ? renameColumnData(t, current, original) : t)))
+    setEdges((prev) => updateEdgesForColumnRename(prev, tableId, current, original))
+    setSelectedColumns((prev) => renameSelectedColumns(prev, tableId, current, original))
+    setColumnRenames((prev) => ({
+      ...prev,
+      [tableId]: { ...(prev[tableId] ?? {}), [original]: original },
+    }))
   }, [])
 
   const handlePreview = useCallback(() => {
@@ -356,7 +443,10 @@ function App() {
       const delimiter = opt.delimiter === 'csv' ? ',' : opt.delimiter === 'tsv' ? '\t' : detectDelimiter(t.sourceText)
       const rows = await parseDelimitedText(t.sourceText, delimiter, opt.skipRows ?? 0)
       const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
-      const tableNew = { ...t, rows, columns }
+      let tableNew = { ...t, rows, columns }
+      if (t.columnRenames) {
+        tableNew = applyColumnRenames(tableNew, t.columnRenames)
+      }
       tablesOut = tablesOut.map((tt) => (tt.id === t.id ? tableNew : tt))
       edgesOut = edgesOut.filter((e) => {
         if (e.source === t.id && e.sourceHandle && !columns.includes(e.sourceHandle)) return false
@@ -378,8 +468,9 @@ function App() {
     const skipRows = opts.skipRows ?? 0
     const rows = await parseDelimitedText(table.sourceText, delimiter, skipRows)
     const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
-    setTables((prev) => prev.map((t) => (t.id === tableId ? { ...t, rows, columns } : t)))
-    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { table: { ...table, rows, columns } } } : n)))
+    const recomputed = table.columnRenames ? applyColumnRenames({ ...table, rows, columns }, table.columnRenames) : { ...table, rows, columns }
+    setTables((prev) => prev.map((t) => (t.id === tableId ? recomputed : t)))
+    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { table: recomputed } } : n)))
     setEdges((prev) => prev.filter((e) => {
       if (e.source === tableId && e.sourceHandle && !columns.includes(e.sourceHandle)) return false
       if (e.target === tableId && e.targetHandle && !columns.includes(e.targetHandle)) return false
@@ -419,7 +510,7 @@ function App() {
           x: 120 + ((offset + idx) % 3) * 320,
           y: 80 + Math.floor((offset + idx) / 3) * 260,
         },
-        data: { table, isRoot: false },
+        data: { table, isRoot: false, onColumnContextMenu },
       }))
       return [...prev, ...extraNodes]
     })
@@ -609,28 +700,50 @@ function App() {
                       {t.name} <span className="table-item__count">({t.rows.length})</span>
                       {t.id === rootTableId && <span className="table-item__root">Root</span>}
                     </button>
-                    <button
-                      className="table-item__delete"
-                      onClick={() => handleDeleteTable(t.id)}
-                      aria-label={`Delete ${t.name}`}
-                    >
-                      ×
-                    </button>
+                    <div className="table-item__actions">
+                      <button className="table-item__rename" onClick={() => handleRenameTable(t.id)} aria-label={`Rename ${t.name}`}>✎</button>
+                      {t.originalName && t.originalName !== t.name && (
+                        <button className="table-item__reset" onClick={() => handleResetTableName(t.id)} aria-label={`Reset ${t.name}`}>
+                          ↺
+                        </button>
+                      )}
+                      <button
+                        className="table-item__delete"
+                        onClick={() => handleDeleteTable(t.id)}
+                        aria-label={`Delete ${t.name}`}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
                   {expanded && (
                     <ul className="table-columns">
-                      {t.columns.map((col) => (
-                        <li key={col}>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={selectedColumns[t.id]?.includes(col) ?? true}
-                              onChange={() => handleColumnToggle(t.id, col)}
-                            />
-                            {col}
-                          </label>
-                        </li>
-                      ))}
+                      {t.columns.map((col) => {
+                        const renames = t.columnRenames ?? {}
+                        const original = Object.entries(renames).find((entry) => entry[1] === col)?.[0] ?? col
+                        return (
+                          <li key={col} className="table-column">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selectedColumns[t.id]?.includes(col) ?? true}
+                                onChange={() => handleColumnToggle(t.id, col)}
+                              />
+                              {col}
+                            </label>
+                            <div className="table-column__actions">
+                              <button className="table-column__rename" onClick={() => handleRenameColumn(t.id, col)} aria-label={`Rename ${col}`}>
+                                ✎
+                              </button>
+                              {original !== col && (
+                                <button className="table-column__reset" onClick={() => handleResetColumnName(t.id, col)} aria-label={`Reset ${col}`}>
+                                  ↺
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        )
+                      })}
                     </ul>
                   )}
                 </li>
@@ -856,6 +969,10 @@ function App() {
           <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
             <h4>Table</h4>
             <button onClick={() => { openTablePreview(contextMenu.tableId); closeContextMenu() }}>View Table</button>
+            <button onClick={() => { handleRenameTable(contextMenu.tableId); closeContextMenu() }}>Rename</button>
+            {tables.find((t) => t.id === contextMenu.tableId)?.originalName && tables.find((t) => t.id === contextMenu.tableId)?.originalName !== tables.find((t) => t.id === contextMenu.tableId)?.name && (
+              <button onClick={() => { handleResetTableName(contextMenu.tableId); closeContextMenu() }}>Reset name</button>
+            )}
             <h5>Parsing options</h5>
             <label>
               Delimiter
@@ -888,6 +1005,21 @@ function App() {
             <button onClick={closeContextMenu}>Close</button>
           </div>
         )}
+        {contextMenu && contextMenu.type === 'column' && (() => {
+          const table = tables.find((t) => t.id === contextMenu.tableId)
+          const original = table ? findOriginalColumn(table.columnRenames ?? {}, contextMenu.column) ?? contextMenu.column : contextMenu.column
+          return (
+            <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+              <h4>Column</h4>
+              <div>{table?.name ?? contextMenu.tableId} · {contextMenu.column}</div>
+              <button onClick={() => { handleRenameColumn(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Rename</button>
+              {original !== contextMenu.column && (
+                <button onClick={() => { handleResetColumnName(contextMenu.tableId, contextMenu.column); closeContextMenu() }}>Reset name</button>
+              )}
+              <button onClick={closeContextMenu}>Close</button>
+            </div>
+          )
+        })()}
         {contextMenu && contextMenu.type === 'edge' && (
           <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
             <h4>Relationship</h4>

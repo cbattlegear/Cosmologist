@@ -1,11 +1,13 @@
 import { Handle, Position } from 'reactflow'
 import type { NodeProps } from 'reactflow'
 import type { TableData } from '../lib/types'
+import type { MouseEvent } from 'react'
 import './TableNode.css'
 
 export type TableNodeData = {
   table: TableData
   isRoot?: boolean
+  onColumnContextMenu?: (tableId: string, column: string, event: MouseEvent) => void
 }
 
 export default function TableNode({ data }: NodeProps<TableNodeData>) {
@@ -17,7 +19,11 @@ export default function TableNode({ data }: NodeProps<TableNodeData>) {
       </div>
       <div className="table-node__columns">
         {data.table.columns.map((col) => (
-          <div className="table-node__column" key={col}>
+          <div
+            className="table-node__column"
+            key={col}
+            onContextMenu={(e) => data.onColumnContextMenu?.(data.table.id, col, e)}
+          >
             <Handle type="target" position={Position.Left} id={col} className="table-node__handle table-node__handle--left" />
             <span className="table-node__colname">{col}</span>
             <Handle type="source" position={Position.Right} id={col} className="table-node__handle table-node__handle--right" />

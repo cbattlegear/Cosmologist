@@ -8,6 +8,8 @@ export interface TableData {
   rows: Row[]
   sourceText?: string
   sourceType?: string
+  originalName?: string
+  columnRenames?: Record<string, string> // original -> current
 }
 
 export interface ParseFileError {

@@ -2,6 +2,7 @@ import type { TableData } from './types'
 import type { ProjectState } from './projects'
 import { parseFiles } from './parseFiles'
 import { getProjectSource } from './projects'
+import { applyTableRenames, applyAllColumnRenames } from './rename'
 
 export async function rehydrateTables(state: ProjectState): Promise<TableData[]> {
   const files: File[] = []
@@ -14,5 +15,6 @@ export async function rehydrateTables(state: ProjectState): Promise<TableData[]>
   }
   if (!files.length) return []
   const { tables } = await parseFiles(files)
-  return tables
+  const renamedTables = applyAllColumnRenames(applyTableRenames(tables, state.tableRenames), state.columnRenames)
+  return renamedTables
 }

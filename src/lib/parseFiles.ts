@@ -221,7 +221,8 @@ export async function parseFiles(
       const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
       const tableBase = name.replace(/\.[^.]+$/, '')
       const id = uniqueId(slugify(tableBase), usedIds)
-      tables.push({ id, name: tableBase, fileName: name, columns, rows, sourceText, sourceType })
+      const columnRenames = Object.fromEntries(columns.map((c) => [c, c]))
+      tables.push({ id, name: tableBase, originalName: tableBase, fileName: name, columns, rows, sourceText, sourceType, columnRenames })
     } catch (e: any) {
       errors.push(makeError(name, `Failed parsing ${name}: ${e?.message ?? e}`, e?.stack ?? String(e)))
     }
