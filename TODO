@@ -2,8 +2,6 @@
 [x] More in depth error reporting on file upload
 [x] Rename columns and tables
 [x] SQL Schema import with Faker data (schema paste import)
-Schema Mapping/Pivots with Regex
-Embed related data/potentially recursive
 [x] Allow for Document root vs Active Root
 [x] Output all documents/tables
 
@@ -16,3 +14,11 @@ Embed related data/potentially recursive
 [x] Verify Table view shows properly
 [x] Make connection points more obvious/outside of boxes
 
+## Data Modeling
+Schema Mapping/Pivots with Regex
+Embed related data/potentially recursive
+RU Estimation (based on https://cosmos.azure.com/capacitycalculator/)
+
+## Nice to have
+Right click on canvas, Arrange (move nodes to logical spots based on relationships)
+Linkable public projects (maybe export full model to single JSO and can load from URL?)
