@@ -62,6 +62,7 @@ function App() {
     | { type: 'table'; x: number; y: number; tableId: string }
     | { type: 'column'; x: number; y: number; tableId: string; column: string }
     | { type: 'edge'; x: number; y: number; edgeId: string }
+    | { type: 'pane'; x: number; y: number }
     | null
   >(null)
   const [edgeTypes, setEdgeTypes] = useState<Record<string, 'one-to-many' | 'one-to-one'>>({})
@@ -407,6 +408,82 @@ function App() {
   }, [])
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
+  const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault()
+    setContextMenu({ type: 'pane', x: event.clientX, y: event.clientY })
+  }, [])
+
+  const arrangeNodes = useCallback(() => {
+    setNodes((prev) => {
+      if (!prev.length) return prev
+      const nodeIds = prev.map((n) => n.id)
+      const nodeSet = new Set(nodeIds)
+      const currentEdges = edgesRef.current
+      // Build adjacency for topological sort (parent → children)
+      const children = new Map<string, string[]>()
+      const inDegree = new Map<string, number>()
+      for (const id of nodeIds) {
+        children.set(id, [])
+        inDegree.set(id, 0)
+      }
+      for (const e of currentEdges) {
+        if (nodeSet.has(e.source) && nodeSet.has(e.target) && e.source !== e.target) {
+          children.get(e.source)!.push(e.target)
+          inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1)
+        }
+      }
+      // Kahn's algorithm – topological sort into layers
+      const layers: string[][] = []
+      let queue = nodeIds.filter((id) => (inDegree.get(id) ?? 0) === 0)
+      const visited = new Set<string>()
+      while (queue.length) {
+        layers.push(queue)
+        for (const id of queue) visited.add(id)
+        const next: string[] = []
+        for (const id of queue) {
+          for (const child of children.get(id) ?? []) {
+            inDegree.set(child, (inDegree.get(child) ?? 0) - 1)
+            if ((inDegree.get(child) ?? 0) <= 0 && !visited.has(child)) {
+              next.push(child)
+              visited.add(child)
+            }
+          }
+        }
+        queue = next
+      }
+      // Add any remaining nodes (cycles) as a final layer
+      const remaining = nodeIds.filter((id) => !visited.has(id))
+      if (remaining.length) layers.push(remaining)
+
+      const NODE_W = 280
+      const NODE_H = 220
+      const GAP_X = 60
+      const GAP_Y = 60
+      const START_X = 80
+      const START_Y = 60
+
+      // Assign positions: each layer is a row, nodes in each row spread horizontally
+      const positionMap = new Map<string, { x: number; y: number }>()
+      // Center each layer relative to the widest layer
+      const maxCols = Math.max(...layers.map((l) => l.length))
+      const totalWidth = maxCols * (NODE_W + GAP_X) - GAP_X
+      for (let row = 0; row < layers.length; row++) {
+        const layer = layers[row]
+        const layerWidth = layer.length * (NODE_W + GAP_X) - GAP_X
+        const offsetX = START_X + (totalWidth - layerWidth) / 2
+        for (let col = 0; col < layer.length; col++) {
+          positionMap.set(layer[col], { x: offsetX + col * (NODE_W + GAP_X), y: START_Y + row * (NODE_H + GAP_Y) })
+        }
+      }
+
+      return prev.map((n) => {
+        const pos = positionMap.get(n.id)
+        return pos ? { ...n, position: pos } : n
+      })
+    })
+    closeContextMenu()
+  }, [closeContextMenu])
 
   const pushError = useCallback((message: string, detail?: string, fileName?: string) => {
     setErrors((prev) => prev.concat({
@@ -1076,6 +1153,7 @@ function App() {
           onEdgeContextMenu={onEdgeContextMenu}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={onNodeContextMenu}
+          onPaneContextMenu={onPaneContextMenu}
           fitView
           nodeTypes={nodeTypes}
           defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 } }}
@@ -1664,6 +1742,13 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
             </div>
           )
         })()}
+        {contextMenu && contextMenu.type === 'pane' && (
+          <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+            <h4>Canvas</h4>
+            <button onClick={arrangeNodes}>Arrange</button>
+            <button onClick={closeContextMenu}>Close</button>
+          </div>
+        )}
       </main>
     </div>
   </div>
