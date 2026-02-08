@@ -22,7 +22,7 @@ import type {
 import { removeEdge } from './lib/removeEdge'
 import 'reactflow/dist/style.css'
 import './App.css'
-import { parseFiles, detectDelimiter, parseDelimitedText } from './lib/parseFiles'
+import { parseFiles, detectDelimiter, parseDelimitedText, slugify } from './lib/parseFiles'
 import { parseSqlServerSchema } from './lib/parseSqlSchema'
 import { generateDummyRowsForSchema } from './lib/dummyData'
 import { buildJoinedDocument, toRelationshipEdges } from './lib/join'
@@ -91,6 +91,10 @@ function App() {
   const [sqlSchemaModalOpen, setSqlSchemaModalOpen] = useState(false)
   const [sqlSchemaText, setSqlSchemaText] = useState('')
   const [sqlSchemaSource, setSqlSchemaSource] = useState('')
+  const [createTableOpen, setCreateTableOpen] = useState(false)
+  const [createTableName, setCreateTableName] = useState('')
+  const [createTableColumns, setCreateTableColumns] = useState<string[]>([''])
+  const [createTableRows, setCreateTableRows] = useState<Record<string, string>[]>([])
 
   const loadInputRef = useRef<HTMLInputElement>(null)
   const addInputRef = useRef<HTMLInputElement>(null)
@@ -466,6 +470,52 @@ function App() {
     setSqlSchemaModalOpen(false)
     setSqlSchemaText('')
   }, [sqlSchemaText, applyParsedTablesAndEdges])
+
+  const handleCreateTable = useCallback(() => {
+    const name = createTableName.trim()
+    if (!name) return
+    const cols = createTableColumns.map((c) => c.trim()).filter(Boolean)
+    if (!cols.length) return
+    const usedIds = new Set(tablesRef.current.map((t) => t.id))
+    let id = slugify(name) || 'table'
+    let i = 1
+    while (usedIds.has(id)) { id = `${slugify(name) || 'table'}-${i++}` }
+    const rows = createTableRows
+      .map((r) => {
+        const row: Record<string, any> = {}
+        cols.forEach((c) => { row[c] = r[c] ?? '' })
+        return row
+      })
+      .filter((r) => Object.values(r).some((v) => v !== ''))
+    const table: TableData = {
+      id,
+      name,
+      fileName: `${name} (manual)`,
+      columns: cols,
+      rows,
+      sourceType: 'manual',
+    }
+    setTables((prev) => [...prev, table])
+    setSelectedColumns((prev) => ({ ...prev, [id]: [...cols] }))
+    setExpandedTables((prev) => ({ ...prev, [id]: false }))
+    setNodes((prev) => {
+      const offset = prev.length
+      return [...prev, {
+        id: table.id,
+        type: 'tableNode',
+        position: { x: 120 + (offset % 3) * 320, y: 80 + Math.floor(offset / 3) * 260 },
+        data: { table, isRoot: false, onColumnContextMenu },
+      }]
+    })
+    if (!tablesRef.current.length) {
+      setRootTableId(id)
+      setLeadRowIndex(0)
+    }
+    setCreateTableOpen(false)
+    setCreateTableName('')
+    setCreateTableColumns([''])
+    setCreateTableRows([])
+  }, [createTableName, createTableColumns, createTableRows, onColumnContextMenu])
 
   const handleRenameTable = useCallback((tableId: string) => {
     const table = tablesRef.current.find((t) => t.id === tableId)
@@ -849,6 +899,7 @@ function App() {
                 <button onClick={triggerLoadFiles}>Load dataset(s)</button>
                 <button onClick={triggerAddFiles}>Add file(s)</button>
                 <button onClick={() => { setSqlSchemaModalOpen(true); closeMenus() }}>Load SQL Server Schema</button>
+                <button onClick={() => { setCreateTableOpen(true); closeMenus() }}>Create Table</button>
               </div>
             )}
           </div>
@@ -1279,6 +1330,126 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
               </div>
               <div className="modal__footer">
                 <button onClick={handleSqlSchemaParse} disabled={!sqlSchemaText.trim()}>Parse & Load</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {createTableOpen && (
+          <div className="modal" onClick={() => setCreateTableOpen(false)}>
+            <div className="modal__content modal__content--wide" onClick={(e) => e.stopPropagation()}>
+              <div className="modal__header">
+                <h3>Create Table</h3>
+                <button onClick={() => setCreateTableOpen(false)}>Close</button>
+              </div>
+              <div className="modal__body">
+                <label className="create-table__label">
+                  Table name
+                  <input
+                    type="text"
+                    className="create-table__name-input"
+                    value={createTableName}
+                    onChange={(e) => setCreateTableName(e.target.value)}
+                    placeholder="e.g. Products"
+                    autoFocus
+                  />
+                </label>
+                <fieldset className="create-table__columns-fieldset">
+                  <legend>Columns</legend>
+                  <ul className="create-table__columns-list">
+                    {createTableColumns.map((col, idx) => (
+                      <li key={idx} className="create-table__column-row">
+                        <input
+                          type="text"
+                          value={col}
+                          placeholder={`Column ${idx + 1}`}
+                          onChange={(e) => {
+                            const next = [...createTableColumns]
+                            next[idx] = e.target.value
+                            setCreateTableColumns(next)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              setCreateTableColumns((prev) => [...prev, ''])
+                              setTimeout(() => {
+                                const inputs = document.querySelectorAll<HTMLInputElement>('.create-table__columns-list input')
+                                inputs[inputs.length - 1]?.focus()
+                              }, 0)
+                            }
+                          }}
+                        />
+                        <button
+                          className="create-table__remove-col"
+                          onClick={() => {
+                            if (createTableColumns.length <= 1) return
+                            const next = createTableColumns.filter((_, i) => i !== idx)
+                            setCreateTableColumns(next)
+                            setCreateTableRows((prev) => prev.map((r) => {
+                              const row = { ...r }
+                              delete row[col]
+                              return row
+                            }))
+                          }}
+                          disabled={createTableColumns.length <= 1}
+                          aria-label="Remove column"
+                        >×</button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button className="create-table__add-col" onClick={() => setCreateTableColumns((prev) => [...prev, ''])}>
+                    + Add column
+                  </button>
+                </fieldset>
+
+                {createTableColumns.some((c) => c.trim()) && (
+                  <fieldset className="create-table__rows-fieldset">
+                    <legend>Data rows ({createTableRows.length})</legend>
+                    <div className="create-table__grid-wrapper">
+                      <table className="create-table__grid">
+                        <thead>
+                          <tr>
+                            {createTableColumns.filter((c) => c.trim()).map((col) => (
+                              <th key={col}>{col}</th>
+                            ))}
+                            <th className="create-table__grid-action"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {createTableRows.map((row, ri) => (
+                            <tr key={ri}>
+                              {createTableColumns.filter((c) => c.trim()).map((col) => (
+                                <td key={col}>
+                                  <input
+                                    type="text"
+                                    value={row[col] ?? ''}
+                                    onChange={(e) => {
+                                      setCreateTableRows((prev) => {
+                                        const next = [...prev]
+                                        next[ri] = { ...next[ri], [col]: e.target.value }
+                                        return next
+                                      })
+                                    }}
+                                  />
+                                </td>
+                              ))}
+                              <td className="create-table__grid-action">
+                                <button onClick={() => setCreateTableRows((prev) => prev.filter((_, i) => i !== ri))} aria-label="Delete row">×</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button className="create-table__add-row" onClick={() => setCreateTableRows((prev) => [...prev, {}])}>
+                      + Add row
+                    </button>
+                  </fieldset>
+                )}
+              </div>
+              <div className="modal__footer">
+                <button onClick={handleCreateTable} disabled={!createTableName.trim() || !createTableColumns.some((c) => c.trim())}>
+                  Create
+                </button>
               </div>
             </div>
           </div>
