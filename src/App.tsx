@@ -98,6 +98,25 @@ function App() {
   const [sqlSchemaSource, setSqlSchemaSource] = useState('')
   const [createTableOpen, setCreateTableOpen] = useState(false)
   const [createTableName, setCreateTableName] = useState('')
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
+    if (stored) return stored
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  })
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('cosmologist_theme', theme)
+  }, [theme])
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!mq) return
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('cosmologist_theme')) setTheme(e.matches ? 'dark' : 'light')
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
   const [createTableColumns, setCreateTableColumns] = useState<string[]>([''])
   const [createTableRows, setCreateTableRows] = useState<Record<string, string>[]>([])
 
@@ -1041,6 +1060,13 @@ function App() {
         </nav>
         <div className="project-title" title={currentProjectName}>{currentProjectName}</div>
         <div className="app-brand">
+          <button
+            onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.25rem', lineHeight: 1 }}
+            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
           <img src={logoUrl} alt="Cosmologist logo" className="app-logo" />
           <div className="app-title">Cosmologist</div>
         </div>
