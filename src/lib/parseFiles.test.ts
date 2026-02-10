@@ -138,6 +138,8 @@ describe('parseFiles', () => {
     expect(tables).toHaveLength(1)
     expect(tables[0].columns).toEqual(['id', 'name'])
     expect(tables[0].rows).toHaveLength(1)
+    expect(tables[0].sourceType).toBe('csv')
+    expect(tables[0].sourceText).toBeDefined()
   })
 
   it('parses tar archive with json', async () => {

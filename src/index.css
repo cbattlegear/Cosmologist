@@ -2,11 +2,71 @@
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.4;
   font-weight: 400;
-  color: #213547;
-  background-color: #f5f5f5;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --bg-primary: #f5f5f5;
+  --bg-secondary: #fafafa;
+  --bg-surface: #fff;
+  --bg-hover: #f0f4ff;
+  --bg-active: #eef0ff;
+  --bg-topbar: #d4d0c8;
+  --bg-input: #fff;
+  --bg-code: #111;
+  --text-primary: #213547;
+  --text-secondary: #555;
+  --text-muted: #666;
+  --text-code: #eee;
+  --border-primary: #e0e0e0;
+  --border-secondary: #ccc;
+  --border-light: #eee;
+  --accent: #4a90d9;
+  --accent-hover: #3a7bc8;
+  --accent-purple: #4f46e5;
+  --accent-doc: #2b6cb0;
+  --danger: #b00020;
+  --danger-bg: #ffe8e8;
+  --danger-border: #f5bcbc;
+  --danger-text: #a02020;
+  --shadow: rgba(0,0,0,0.1);
+  --overlay: rgba(0,0,0,0.5);
+  --menu-bg: #f0f0f0;
+  --menu-hover: #c0c0c0;
+  --menu-border: #808080;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-surface: #1e293b;
+  --bg-hover: #2a3a5c;
+  --bg-active: #2a3a5c;
+  --bg-topbar: #0f172a;
+  --bg-input: #1e293b;
+  --bg-code: #0d1117;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-code: #e2e8f0;
+  --border-primary: #334155;
+  --border-secondary: #475569;
+  --border-light: #1e293b;
+  --accent: #60a5fa;
+  --accent-hover: #3b82f6;
+  --accent-purple: #818cf8;
+  --accent-doc: #60a5fa;
+  --danger: #ef4444;
+  --danger-bg: #450a0a;
+  --danger-border: #7f1d1d;
+  --danger-text: #fca5a5;
+  --shadow: rgba(0,0,0,0.3);
+  --overlay: rgba(0,0,0,0.7);
+  --menu-bg: #1e293b;
+  --menu-hover: #334155;
+  --menu-border: #475569;
 }
 
 * {
@@ -17,7 +77,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f5f5f5;
+  background: var(--bg-primary);
 }
 
 #root {
@@ -27,4 +87,38 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* React Flow dark mode support */
+[data-theme="dark"] .react-flow {
+  background: var(--bg-primary);
+}
+[data-theme="dark"] .react-flow__background {
+  --xy-background-color: var(--bg-primary);
+}
+[data-theme="dark"] .react-flow__controls {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 2px 6px var(--shadow);
+}
+[data-theme="dark"] .react-flow__controls-button {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-primary);
+  fill: var(--text-primary);
+  color: var(--text-primary);
+}
+[data-theme="dark"] .react-flow__controls-button:hover {
+  background: var(--bg-hover);
+}
+[data-theme="dark"] .react-flow__minimap {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+}
+[data-theme="dark"] .react-flow__minimap-mask {
+  fill: var(--bg-primary);
+  opacity: 0.6;
+}
+[data-theme="dark"] .react-flow__minimap-node {
+  fill: var(--border-secondary);
+  stroke: var(--border-primary);
 }

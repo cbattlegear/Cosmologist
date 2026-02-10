@@ -27,7 +27,7 @@ import { parseSqlServerSchema } from './lib/parseSqlSchema'
 import { generateDummyRowsForSchema } from './lib/dummyData'
 import { buildJoinedDocument, toRelationshipEdges } from './lib/join'
 import { removeTable } from './lib/removeTable'
-import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, renameProject } from './lib/projects'
+import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, getProjectSource, renameProject, exportProject, importProject, type ExportedProject } from './lib/projects'
 import { rehydrateTables } from './lib/rehydrate'
 import type { TableData, ParseFileError } from './lib/types'
 import { renameColumn as renameColumnData, renameTable as renameTableData, updateEdgesForColumnRename, renameSelectedColumns, ensureColumnRenames, findOriginalColumn, applyColumnRenames } from './lib/rename'
@@ -42,6 +42,7 @@ import logoUrl from './assets/logo.svg'
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
 const AUTHOR = 'Cosmologist'
+const GITHUB_URL = import.meta.env.VITE_APP_GITHUB_URL ?? 'https://github.com/cbattlegear/Cosmologist'
 
 function App() {
   const [tables, setTables] = useState<TableData[]>([])
@@ -86,6 +87,9 @@ function App() {
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(() => {
+    return !localStorage.getItem('cosmologist_welcomed')
+  })
 
   const currentProjectName = useMemo(() => projects.find((p) => p.id === projectId)?.name ?? 'Project', [projects, projectId])
   const [dragOverlay, setDragOverlay] = useState(false)
@@ -94,6 +98,25 @@ function App() {
   const [sqlSchemaSource, setSqlSchemaSource] = useState('')
   const [createTableOpen, setCreateTableOpen] = useState(false)
   const [createTableName, setCreateTableName] = useState('')
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
+    if (stored) return stored
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  })
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('cosmologist_theme', theme)
+  }, [theme])
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!mq) return
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('cosmologist_theme')) setTheme(e.matches ? 'dark' : 'light')
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
   const [createTableColumns, setCreateTableColumns] = useState<string[]>([''])
   const [createTableRows, setCreateTableRows] = useState<Record<string, string>[]>([])
 
@@ -139,7 +162,7 @@ function App() {
     if (state) {
       rehydrateTables(state as ProjectState).then(async (tables) => {
         const parsedOpts = state.tableParsingOptions ?? {}
-        const applied = await applyParsingOptions(tables, state.edges ?? [], parsedOpts, state.selectedColumns ?? {})
+        const applied = await applyParsingOptions(tables, state.edges ?? [], parsedOpts, state.selectedColumns ?? {}, state.projectId)
         setTables(applied.tablesOut)
         setNodes(
           applied.tablesOut.map((t, idx) => ({
@@ -366,6 +389,42 @@ function App() {
     setProjectsModalOpen(false)
     closeMenus()
   }, [projectId, projects, closeMenus])
+
+  const handleProjectExport = useCallback(async () => {
+    if (!projectId) return
+    const name = projects.find((p) => p.id === projectId)?.name ?? 'Project'
+    const data = await exportProject(projectId, name)
+    if (!data) return
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    saveAs(blob, `${name.replace(/[^a-z0-9_\- ]/gi, '_')}.cosmologist.json`)
+    closeMenus()
+  }, [projectId, projects, closeMenus])
+
+  const importInputRef = useRef<HTMLInputElement>(null)
+
+  const handleProjectImport = useCallback(() => {
+    importInputRef.current?.click()
+    closeMenus()
+  }, [closeMenus])
+
+  const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text) as ExportedProject
+      if (!data._cosmologist || !data.state) {
+        alert('Invalid Cosmologist project file.')
+        return
+      }
+      const meta = await importProject(data)
+      setProjects((prev) => [...prev, meta])
+      setProjectId(meta.id)
+    } catch {
+      alert('Failed to import project. Please check the file is valid.')
+    }
+    e.target.value = ''
+  }, [])
 
   const handleTableExpandToggle = useCallback((tableId: string) => {
     setExpandedTables((prev) => ({ ...prev, [tableId]: !prev[tableId] }))
@@ -743,6 +802,7 @@ function App() {
     edgesInput: Edge[],
     opts: Record<string, { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }>,
     selectedCols: Record<string, string[]>,
+    pid?: string,
   ) => {
     let tablesOut: TableData[] = tablesInput.map((t) => ({ ...t, rows: t.rows.map((r) => ({ ...r })) }))
     let edgesOut: Edge[] = [...edgesInput]
@@ -751,11 +811,12 @@ function App() {
     for (const t of tablesOut) {
       const opt = opts[t.id]
       if (!opt) continue
-      if (!t.sourceText) continue
-      const delimiter = opt.delimiter === 'csv' ? ',' : opt.delimiter === 'tsv' ? '\t' : detectDelimiter(t.sourceText)
-      const rows = await parseDelimitedText(t.sourceText, delimiter, opt.skipRows ?? 0)
+      const sourceText = t.sourceText ?? (pid ? await getProjectSource(pid, t.id) : undefined)
+      if (!sourceText) continue
+      const delimiter = opt.delimiter === 'csv' ? ',' : opt.delimiter === 'tsv' ? '\t' : detectDelimiter(sourceText)
+      const rows = await parseDelimitedText(sourceText, delimiter, opt.skipRows ?? 0)
       const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
-      let tableNew = { ...t, rows, columns }
+      let tableNew: TableData = { ...t, sourceText, rows, columns }
       if (t.columnRenames) {
         tableNew = applyColumnRenames(tableNew, t.columnRenames)
       }
@@ -775,12 +836,15 @@ function App() {
 
   const reparseTable = useCallback(async (tableId: string, opts: { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }) => {
     const table = tablesRef.current.find((t) => t.id === tableId)
-    if (!table?.sourceText) return
-    const delimiter = opts.delimiter === 'csv' ? ',' : opts.delimiter === 'tsv' ? '\t' : detectDelimiter(table.sourceText)
+    if (!table) return
+    const sourceText = table.sourceText ?? (projectId ? await getProjectSource(projectId, tableId) : undefined)
+    if (!sourceText) return
+    const delimiter = opts.delimiter === 'csv' ? ',' : opts.delimiter === 'tsv' ? '\t' : detectDelimiter(sourceText)
     const skipRows = opts.skipRows ?? 0
-    const rows = await parseDelimitedText(table.sourceText, delimiter, skipRows)
+    const rows = await parseDelimitedText(sourceText, delimiter, skipRows)
     const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
-    const recomputed = table.columnRenames ? applyColumnRenames({ ...table, rows, columns }, table.columnRenames) : { ...table, rows, columns }
+    const withSource = { ...table, sourceText }
+    const recomputed = table.columnRenames ? applyColumnRenames({ ...withSource, rows, columns }, table.columnRenames) : { ...withSource, rows, columns }
     setTables((prev) => prev.map((t) => (t.id === tableId ? recomputed : t)))
     setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { table: recomputed } } : n)))
     setEdges((prev) => prev.filter((e) => {
@@ -796,7 +860,7 @@ function App() {
       return next
     })
     setTableParsingOptions((prev) => ({ ...prev, [tableId]: opts }))
-  }, [])
+  }, [projectId])
 
   const onAddFiles = useCallback(async (files: FileList | File[]) => {
     const usedIds = new Set<string>(tablesRef.current.map((t) => t.id))
@@ -966,6 +1030,9 @@ function App() {
                 <button onClick={handleProjectDuplicate}>Duplicate Project</button>
                 <button onClick={() => { setProjectsModalOpen('open'); closeMenus() }}>Open Project</button>
                 <button onClick={() => { setProjectsModalOpen('manage'); closeMenus() }}>Manage Projects</button>
+                <hr className="menu-separator" />
+                <button onClick={handleProjectExport}>Export Project</button>
+                <button onClick={handleProjectImport}>Import Project</button>
               </div>
             )}
           </div>
@@ -984,6 +1051,7 @@ function App() {
             <button className="menu-button" onClick={() => toggleMenu('help')}>Help ▾</button>
             {menuOpen === 'help' && (
               <div className="menu-dropdown" role="menu">
+                <button onClick={() => { setWelcomeOpen(true); closeMenus() }}>Welcome Guide</button>
                 <button onClick={() => { setHelpOpen(true); closeMenus() }}>Help</button>
                 <button onClick={() => { setAboutOpen(true); closeMenus() }}>About</button>
               </div>
@@ -992,6 +1060,13 @@ function App() {
         </nav>
         <div className="project-title" title={currentProjectName}>{currentProjectName}</div>
         <div className="app-brand">
+          <button
+            onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.25rem', lineHeight: 1 }}
+            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
           <img src={logoUrl} alt="Cosmologist logo" className="app-logo" />
           <div className="app-title">Cosmologist</div>
         </div>
@@ -999,6 +1074,7 @@ function App() {
 
       <input ref={loadInputRef} type="file" multiple webkitdirectory="true" directory="true" accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleFileInput} />
       <input ref={addInputRef} type="file" multiple accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleAddFileInput} />
+      <input ref={importInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} />
 
       <div className="app-body">
         <aside className="sidebar">
@@ -1335,6 +1411,42 @@ function App() {
                 <p><strong>Cosmologist</strong></p>
                 <p>Version: {VERSION}</p>
                 <p>Author: {AUTHOR}</p>
+                <p>GitHub: <a href={GITHUB_URL} target="_blank" rel="noreferrer">{GITHUB_URL}</a></p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {welcomeOpen && (
+          <div className="modal" onClick={() => { setWelcomeOpen(false); localStorage.setItem('cosmologist_welcomed', '1') }}>
+            <div className="modal__content modal__content--wide" onClick={(e) => e.stopPropagation()}>
+              <div className="modal__header">
+                <h3>Welcome to Cosmologist!</h3>
+                <button onClick={() => { setWelcomeOpen(false); localStorage.setItem('cosmologist_welcomed', '1') }}>Close</button>
+              </div>
+              <div className="modal__body welcome-body">
+                <p className="welcome-intro">Cosmologist helps you visualize, relate, and export data from multiple file formats into merged JSON documents — perfect for building Azure Cosmos DB models.</p>
+                <ol className="welcome-steps">
+                  <li>
+                    <strong>Load your data</strong>
+                    <span>Use <em>Load Data → Load dataset(s)</em> or drag & drop files onto the canvas. Supports CSV, TSV, JSON, JSONL, ZIP, TAR, and SQL Server schemas.</span>
+                  </li>
+                  <li>
+                    <strong>Create relationships</strong>
+                    <span>Drag from a column handle on one table to a column on another to define joins. Right-click edges to set one-to-one or one-to-many.</span>
+                  </li>
+                  <li>
+                    <strong>Set a root table</strong>
+                    <span>In the sidebar, pick the root table that all other tables relate to. This determines the shape of your output document.</span>
+                  </li>
+                  <li>
+                    <strong>Preview & export</strong>
+                    <span>Select a row index, then click <em>Generate Preview</em> to see the merged JSON. When ready, click <em>Download ZIP</em> to export one JSON file per root row.</span>
+                  </li>
+                </ol>
+                <div className="welcome-footer">
+                  <button className="welcome-start-btn" onClick={() => { setWelcomeOpen(false); localStorage.setItem('cosmologist_welcomed', '1') }}>Get Started</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1534,7 +1646,7 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
         )}
         {contextMenu && contextMenu.type === 'table' && (() => {
           const table = tables.find((t) => t.id === contextMenu.tableId)
-          const isDelimited = table ? ['csv', 'tsv'].includes((table.sourceType ?? '').toLowerCase()) : false
+          const isDelimited = table ? ['csv', 'tsv', 'txt'].includes((table.sourceType ?? '').toLowerCase()) || (!!table.sourceText && !['json', 'jsonl', 'sqlschema'].includes((table.sourceType ?? '').toLowerCase())) : false
           return (
             <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
               <h4>Table</h4>

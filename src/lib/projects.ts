@@ -93,3 +93,41 @@ export function makeProjectId(name: string): string {
     .replace(/^-+|-+$/g, '')
   return slug ? `${slug}-${Date.now()}` : `project-${Date.now()}`
 }
+
+export type ExportedProject = {
+  _cosmologist: true
+  version: 1
+  name: string
+  state: ProjectState
+  sources: Record<string, string>
+}
+
+export async function exportProject(id: string, name: string): Promise<ExportedProject | null> {
+  const state = loadProject(id)
+  if (!state) return null
+  const sources: Record<string, string> = {}
+  for (const tableId of Object.keys(state.tablesSources)) {
+    const src = await getProjectSource(id, tableId)
+    if (src) sources[tableId] = src
+  }
+  return { _cosmologist: true, version: 1, name, state, sources }
+}
+
+export async function importProject(data: ExportedProject): Promise<{ id: string; name: string }> {
+  const list = loadProjectList()
+  let name = data.name
+  let idx = 2
+  const baseName = name
+  while (list.some((p) => p.name === name)) {
+    name = `${baseName} (${idx++})`
+  }
+  const id = makeProjectId(name)
+  const state: ProjectState = { ...data.state, projectId: id }
+  saveProject(id, state)
+  for (const [tableId, sourceText] of Object.entries(data.sources)) {
+    await setProjectSource(id, tableId, sourceText)
+  }
+  const meta = { id, name }
+  saveProjectList([...list, meta])
+  return meta
+}
