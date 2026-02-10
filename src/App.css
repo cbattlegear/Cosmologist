@@ -602,6 +602,12 @@
   background: #c0c0c0;
 }
 
+.menu-separator {
+  margin: 0.25rem 0;
+  border: none;
+  border-top: 1px solid #d0d0d0;
+}
+
 .drag-overlay {
   position: fixed;
   inset: 0;

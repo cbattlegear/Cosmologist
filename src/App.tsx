@@ -27,7 +27,7 @@ import { parseSqlServerSchema } from './lib/parseSqlSchema'
 import { generateDummyRowsForSchema } from './lib/dummyData'
 import { buildJoinedDocument, toRelationshipEdges } from './lib/join'
 import { removeTable } from './lib/removeTable'
-import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, renameProject } from './lib/projects'
+import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, renameProject, exportProject, importProject, type ExportedProject } from './lib/projects'
 import { rehydrateTables } from './lib/rehydrate'
 import type { TableData, ParseFileError } from './lib/types'
 import { renameColumn as renameColumnData, renameTable as renameTableData, updateEdgesForColumnRename, renameSelectedColumns, ensureColumnRenames, findOriginalColumn, applyColumnRenames } from './lib/rename'
@@ -370,6 +370,42 @@ function App() {
     setProjectsModalOpen(false)
     closeMenus()
   }, [projectId, projects, closeMenus])
+
+  const handleProjectExport = useCallback(async () => {
+    if (!projectId) return
+    const name = projects.find((p) => p.id === projectId)?.name ?? 'Project'
+    const data = await exportProject(projectId, name)
+    if (!data) return
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    saveAs(blob, `${name.replace(/[^a-z0-9_\- ]/gi, '_')}.cosmologist.json`)
+    closeMenus()
+  }, [projectId, projects, closeMenus])
+
+  const importInputRef = useRef<HTMLInputElement>(null)
+
+  const handleProjectImport = useCallback(() => {
+    importInputRef.current?.click()
+    closeMenus()
+  }, [closeMenus])
+
+  const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text) as ExportedProject
+      if (!data._cosmologist || !data.state) {
+        alert('Invalid Cosmologist project file.')
+        return
+      }
+      const meta = await importProject(data)
+      setProjects((prev) => [...prev, meta])
+      setProjectId(meta.id)
+    } catch {
+      alert('Failed to import project. Please check the file is valid.')
+    }
+    e.target.value = ''
+  }, [])
 
   const handleTableExpandToggle = useCallback((tableId: string) => {
     setExpandedTables((prev) => ({ ...prev, [tableId]: !prev[tableId] }))
@@ -970,6 +1006,9 @@ function App() {
                 <button onClick={handleProjectDuplicate}>Duplicate Project</button>
                 <button onClick={() => { setProjectsModalOpen('open'); closeMenus() }}>Open Project</button>
                 <button onClick={() => { setProjectsModalOpen('manage'); closeMenus() }}>Manage Projects</button>
+                <hr className="menu-separator" />
+                <button onClick={handleProjectExport}>Export Project</button>
+                <button onClick={handleProjectImport}>Import Project</button>
               </div>
             )}
           </div>
@@ -1004,6 +1043,7 @@ function App() {
 
       <input ref={loadInputRef} type="file" multiple webkitdirectory="true" directory="true" accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleFileInput} />
       <input ref={addInputRef} type="file" multiple accept=".csv,.tsv,.txt,.json,.jsonl,.zip,.gz,.tgz,.tar,.tar.gz" style={{ display: 'none' }} onChange={handleAddFileInput} />
+      <input ref={importInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} />
 
       <div className="app-body">
         <aside className="sidebar">
