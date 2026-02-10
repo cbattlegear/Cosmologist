@@ -27,7 +27,7 @@ import { parseSqlServerSchema } from './lib/parseSqlSchema'
 import { generateDummyRowsForSchema } from './lib/dummyData'
 import { buildJoinedDocument, toRelationshipEdges } from './lib/join'
 import { removeTable } from './lib/removeTable'
-import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, renameProject, exportProject, importProject, type ExportedProject } from './lib/projects'
+import { loadProjectList, loadProject, saveProjectList, saveProject, deleteProject, makeProjectId, type ProjectState, setProjectSource, getProjectSource, renameProject, exportProject, importProject, type ExportedProject } from './lib/projects'
 import { rehydrateTables } from './lib/rehydrate'
 import type { TableData, ParseFileError } from './lib/types'
 import { renameColumn as renameColumnData, renameTable as renameTableData, updateEdgesForColumnRename, renameSelectedColumns, ensureColumnRenames, findOriginalColumn, applyColumnRenames } from './lib/rename'
@@ -143,7 +143,7 @@ function App() {
     if (state) {
       rehydrateTables(state as ProjectState).then(async (tables) => {
         const parsedOpts = state.tableParsingOptions ?? {}
-        const applied = await applyParsingOptions(tables, state.edges ?? [], parsedOpts, state.selectedColumns ?? {})
+        const applied = await applyParsingOptions(tables, state.edges ?? [], parsedOpts, state.selectedColumns ?? {}, state.projectId)
         setTables(applied.tablesOut)
         setNodes(
           applied.tablesOut.map((t, idx) => ({
@@ -783,6 +783,7 @@ function App() {
     edgesInput: Edge[],
     opts: Record<string, { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }>,
     selectedCols: Record<string, string[]>,
+    pid?: string,
   ) => {
     let tablesOut: TableData[] = tablesInput.map((t) => ({ ...t, rows: t.rows.map((r) => ({ ...r })) }))
     let edgesOut: Edge[] = [...edgesInput]
@@ -791,11 +792,12 @@ function App() {
     for (const t of tablesOut) {
       const opt = opts[t.id]
       if (!opt) continue
-      if (!t.sourceText) continue
-      const delimiter = opt.delimiter === 'csv' ? ',' : opt.delimiter === 'tsv' ? '\t' : detectDelimiter(t.sourceText)
-      const rows = await parseDelimitedText(t.sourceText, delimiter, opt.skipRows ?? 0)
+      const sourceText = t.sourceText ?? (pid ? await getProjectSource(pid, t.id) : undefined)
+      if (!sourceText) continue
+      const delimiter = opt.delimiter === 'csv' ? ',' : opt.delimiter === 'tsv' ? '\t' : detectDelimiter(sourceText)
+      const rows = await parseDelimitedText(sourceText, delimiter, opt.skipRows ?? 0)
       const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
-      let tableNew = { ...t, rows, columns }
+      let tableNew: TableData = { ...t, sourceText, rows, columns }
       if (t.columnRenames) {
         tableNew = applyColumnRenames(tableNew, t.columnRenames)
       }
@@ -815,12 +817,15 @@ function App() {
 
   const reparseTable = useCallback(async (tableId: string, opts: { delimiter?: 'auto' | 'csv' | 'tsv'; skipRows?: number }) => {
     const table = tablesRef.current.find((t) => t.id === tableId)
-    if (!table?.sourceText) return
-    const delimiter = opts.delimiter === 'csv' ? ',' : opts.delimiter === 'tsv' ? '\t' : detectDelimiter(table.sourceText)
+    if (!table) return
+    const sourceText = table.sourceText ?? (projectId ? await getProjectSource(projectId, tableId) : undefined)
+    if (!sourceText) return
+    const delimiter = opts.delimiter === 'csv' ? ',' : opts.delimiter === 'tsv' ? '\t' : detectDelimiter(sourceText)
     const skipRows = opts.skipRows ?? 0
-    const rows = await parseDelimitedText(table.sourceText, delimiter, skipRows)
+    const rows = await parseDelimitedText(sourceText, delimiter, skipRows)
     const columns = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
-    const recomputed = table.columnRenames ? applyColumnRenames({ ...table, rows, columns }, table.columnRenames) : { ...table, rows, columns }
+    const withSource = { ...table, sourceText }
+    const recomputed = table.columnRenames ? applyColumnRenames({ ...withSource, rows, columns }, table.columnRenames) : { ...withSource, rows, columns }
     setTables((prev) => prev.map((t) => (t.id === tableId ? recomputed : t)))
     setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { table: recomputed } } : n)))
     setEdges((prev) => prev.filter((e) => {
@@ -836,7 +841,7 @@ function App() {
       return next
     })
     setTableParsingOptions((prev) => ({ ...prev, [tableId]: opts }))
-  }, [])
+  }, [projectId])
 
   const onAddFiles = useCallback(async (files: FileList | File[]) => {
     const usedIds = new Set<string>(tablesRef.current.map((t) => t.id))
@@ -1615,7 +1620,7 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
         )}
         {contextMenu && contextMenu.type === 'table' && (() => {
           const table = tables.find((t) => t.id === contextMenu.tableId)
-          const isDelimited = table ? ['csv', 'tsv'].includes((table.sourceType ?? '').toLowerCase()) : false
+          const isDelimited = table ? ['csv', 'tsv', 'txt'].includes((table.sourceType ?? '').toLowerCase()) || (!!table.sourceText && !['json', 'jsonl', 'sqlschema'].includes((table.sourceType ?? '').toLowerCase())) : false
           return (
             <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
               <h4>Table</h4>
