@@ -42,6 +42,7 @@ import logoUrl from './assets/logo.svg'
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
 const AUTHOR = 'Cosmologist'
+const GITHUB_URL = import.meta.env.VITE_APP_GITHUB_URL ?? 'https://github.com/cbattlegear/Cosmologist'
 
 function App() {
   const [tables, setTables] = useState<TableData[]>([])
@@ -86,6 +87,9 @@ function App() {
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [welcomeOpen, setWelcomeOpen] = useState(() => {
+    return !localStorage.getItem('cosmologist_welcomed')
+  })
 
   const currentProjectName = useMemo(() => projects.find((p) => p.id === projectId)?.name ?? 'Project', [projects, projectId])
   const [dragOverlay, setDragOverlay] = useState(false)
@@ -984,6 +988,7 @@ function App() {
             <button className="menu-button" onClick={() => toggleMenu('help')}>Help ▾</button>
             {menuOpen === 'help' && (
               <div className="menu-dropdown" role="menu">
+                <button onClick={() => { setWelcomeOpen(true); closeMenus() }}>Welcome Guide</button>
                 <button onClick={() => { setHelpOpen(true); closeMenus() }}>Help</button>
                 <button onClick={() => { setAboutOpen(true); closeMenus() }}>About</button>
               </div>
@@ -1335,6 +1340,42 @@ function App() {
                 <p><strong>Cosmologist</strong></p>
                 <p>Version: {VERSION}</p>
                 <p>Author: {AUTHOR}</p>
+                <p>GitHub: <a href={GITHUB_URL} target="_blank" rel="noreferrer">{GITHUB_URL}</a></p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {welcomeOpen && (
+          <div className="modal" onClick={() => { setWelcomeOpen(false); localStorage.setItem('cosmologist_welcomed', '1') }}>
+            <div className="modal__content modal__content--wide" onClick={(e) => e.stopPropagation()}>
+              <div className="modal__header">
+                <h3>Welcome to Cosmologist!</h3>
+                <button onClick={() => { setWelcomeOpen(false); localStorage.setItem('cosmologist_welcomed', '1') }}>Close</button>
+              </div>
+              <div className="modal__body welcome-body">
+                <p className="welcome-intro">Cosmologist helps you visualize, relate, and export data from multiple file formats into merged JSON documents — perfect for building Azure Cosmos DB models.</p>
+                <ol className="welcome-steps">
+                  <li>
+                    <strong>Load your data</strong>
+                    <span>Use <em>Load Data → Load dataset(s)</em> or drag & drop files onto the canvas. Supports CSV, TSV, JSON, JSONL, ZIP, TAR, and SQL Server schemas.</span>
+                  </li>
+                  <li>
+                    <strong>Create relationships</strong>
+                    <span>Drag from a column handle on one table to a column on another to define joins. Right-click edges to set one-to-one or one-to-many.</span>
+                  </li>
+                  <li>
+                    <strong>Set a root table</strong>
+                    <span>In the sidebar, pick the root table that all other tables relate to. This determines the shape of your output document.</span>
+                  </li>
+                  <li>
+                    <strong>Preview & export</strong>
+                    <span>Select a row index, then click <em>Generate Preview</em> to see the merged JSON. When ready, click <em>Download ZIP</em> to export one JSON file per root row.</span>
+                  </li>
+                </ol>
+                <div className="welcome-footer">
+                  <button className="welcome-start-btn" onClick={() => { setWelcomeOpen(false); localStorage.setItem('cosmologist_welcomed', '1') }}>Get Started</button>
+                </div>
               </div>
             </div>
           </div>

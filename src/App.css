@@ -1054,6 +1054,71 @@
   overflow: auto;
 }
 
+/* ── Welcome guide modal ──────────────────────────── */
+.welcome-intro {
+  font-size: 0.95rem;
+  color: #444;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.welcome-steps {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.welcome-steps li {
+  counter-increment: step;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0.9rem;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border-left: 3px solid #4a90d9;
+}
+
+.welcome-steps li strong::before {
+  content: counter(step) ". ";
+  color: #4a90d9;
+  font-weight: 700;
+}
+
+.welcome-steps li strong {
+  font-size: 0.95rem;
+}
+
+.welcome-steps li span {
+  font-size: 0.88rem;
+  color: #555;
+  line-height: 1.45;
+}
+
+.welcome-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.welcome-start-btn {
+  padding: 0.5rem 1.5rem;
+  background: #4a90d9;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.welcome-start-btn:hover {
+  background: #3a7bc8;
+}
+
 .projects-list {
   list-style: none;
   margin: 0;
