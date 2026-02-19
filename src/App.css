@@ -554,6 +554,19 @@
   flex: 0 0 auto;
 }
 
+.undo-redo-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+  margin-left: 0.25rem;
+}
+
+.undo-redo-bar .menu-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .project-title {
   flex: 1;
   text-align: center;
