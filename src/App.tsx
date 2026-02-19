@@ -38,6 +38,7 @@ import JsonTree from './components/JsonTree'
 import { estimateRu, type RuEstimate } from './lib/ru'
 import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transforms'
 import logoUrl from './assets/logo.svg'
+import { getEmbeddedModel } from './lib/models'
 
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
@@ -98,6 +99,7 @@ function App() {
   const [sqlSchemaSource, setSqlSchemaSource] = useState('')
   const [createTableOpen, setCreateTableOpen] = useState(false)
   const [createTableName, setCreateTableName] = useState('')
+  const [callouts, setCallouts] = useState<Record<string, string>>({})
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
@@ -123,6 +125,7 @@ function App() {
   const loadInputRef = useRef<HTMLInputElement>(null)
   const addInputRef = useRef<HTMLInputElement>(null)
   const dragCounterRef = useRef(0)
+  const modelLoadedRef = useRef(false)
 
   const closeMenus = useCallback(() => setMenuOpen(null), [])
 
@@ -156,6 +159,24 @@ function App() {
     }
   }, [])
 
+  // Auto-load embedded model from ?model= query param
+  useEffect(() => {
+    if (modelLoadedRef.current || !projects.length) return
+    const params = new URLSearchParams(window.location.search)
+    const slug = params.get('model')
+    if (!slug) return
+    const model = getEmbeddedModel(slug)
+    if (!model) return
+    modelLoadedRef.current = true
+    importProject(model).then((meta) => {
+      setProjects((prev) => [...prev, meta])
+      setProjectId(meta.id)
+      params.delete('model')
+      const qs = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    })
+  }, [projects])
+
   useEffect(() => {
     if (!projectId) return
     const state = loadProject(projectId)
@@ -169,7 +190,7 @@ function App() {
             id: t.id,
             type: 'tableNode',
             position: state.nodePositions[t.id] ?? { x: 120 + (idx % 3) * 320, y: 80 + Math.floor(idx / 3) * 260 },
-            data: { table: t, isRoot: (state.rootTableId ?? applied.tablesOut[0]?.id) === t.id, onColumnContextMenu },
+            data: { table: t, isRoot: (state.rootTableId ?? applied.tablesOut[0]?.id) === t.id, onColumnContextMenu, onEditCallout, onRemoveCallout },
           })),
         )
         setEdges(applied.edgesOut)
@@ -188,6 +209,7 @@ function App() {
         setTablePivots((state as any).tablePivots ?? [])
         setDocumentRootIds(state.documentRootIds ?? (applied.tablesOut[0] ? [applied.tablesOut[0].id] : []))
         setSqlSchemaSource(state.sqlSchemaText ?? '')
+        setCallouts((state as any).callouts ?? {})
       })
     } else {
       setTables([])
@@ -205,6 +227,7 @@ function App() {
       setDocumentRootIds([])
       setColumnSplits([])
       setTablePivots([])
+      setCallouts({})
     }
     setHydrated(true)
   }, [projectId])
@@ -238,9 +261,10 @@ function App() {
       edgeColumnFilters,
       edgeMaxDepth,
       edgePropertyNames,
+      callouts,
     } as any)
     setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
-  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames])
+  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts])
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const { tables: parsed, errors } = await parseFiles(files)
     setErrors(errors)
@@ -253,7 +277,7 @@ function App() {
         x: 120 + (idx % 3) * 320,
         y: 80 + Math.floor(idx / 3) * 260,
       },
-      data: { table, isRoot: idx === 0, onColumnContextMenu },
+      data: { table, isRoot: idx === 0, onColumnContextMenu, onEditCallout, onRemoveCallout },
     }))
     setNodes(computedNodes)
     setEdges([])
@@ -325,9 +349,10 @@ function App() {
     setNodes((prev) => prev.map((n) => {
       const splitCols = new Set(columnSplits.filter((s) => s.tableId === n.id).map((s) => s.column))
       const hasPivot = tablePivots.some((p) => p.tableId === n.id)
-      return { ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id), splitColumns: splitCols, hasPivot } }
+      const callout = callouts[n.id]
+      return { ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id), splitColumns: splitCols, hasPivot, callout } }
     }))
-  }, [rootTableId, documentRootIds, columnSplits, tablePivots])
+  }, [rootTableId, documentRootIds, columnSplits, tablePivots, callouts])
 
   const relationshipsSummaries = useMemo(() => {
     return edges.map((e) => {
@@ -339,6 +364,14 @@ function App() {
       }
     })
   }, [edges, tables])
+
+  const edgesWithCallouts = useMemo(() => {
+    return edges.map((e) => {
+      const note = callouts[e.id]
+      if (!note) return e
+      return { ...e, label: '📝', title: note }
+    })
+  }, [edges, callouts])
 
   const handleDeleteEdge = useCallback((id: string) => {
     setEdges((eds) => removeEdge(id, eds))
@@ -466,6 +499,28 @@ function App() {
     setContextMenu({ type: 'column', x: event.clientX, y: event.clientY, tableId, column })
   }, [])
 
+  const onEditCallout = useCallback((id: string) => {
+    const current = (callouts as Record<string, string>)[id] ?? ''
+    const text = prompt('Note:', current)
+    if (text === null) return
+    setCallouts((prev) => {
+      if (!text.trim()) {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      }
+      return { ...prev, [id]: text.trim() }
+    })
+  }, [callouts])
+
+  const onRemoveCallout = useCallback((id: string) => {
+    setCallouts((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
+
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
@@ -581,7 +636,7 @@ function App() {
         x: 120 + (idx % 3) * 320,
         y: 80 + Math.floor(idx / 3) * 260,
       },
-      data: { table, isRoot: idx === 0, onColumnContextMenu },
+      data: { table, isRoot: idx === 0, onColumnContextMenu, onEditCallout, onRemoveCallout },
     }))
     setNodes(computedNodes)
     setEdges(edgesIn)
@@ -640,7 +695,7 @@ function App() {
         id: table.id,
         type: 'tableNode',
         position: { x: 120 + (offset % 3) * 320, y: 80 + Math.floor(offset / 3) * 260 },
-        data: { table, isRoot: false, onColumnContextMenu },
+        data: { table, isRoot: false, onColumnContextMenu, onEditCallout, onRemoveCallout },
       }]
     })
     if (!tablesRef.current.length) {
@@ -886,7 +941,7 @@ function App() {
           x: 120 + ((offset + idx) % 3) * 320,
           y: 80 + Math.floor((offset + idx) / 3) * 260,
         },
-        data: { table, isRoot: false, onColumnContextMenu },
+        data: { table, isRoot: false, onColumnContextMenu, onEditCallout, onRemoveCallout },
       }))
       return [...prev, ...extraNodes]
     })
@@ -1221,7 +1276,7 @@ function App() {
       <main className="canvas" onClick={closeContextMenu}>
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={edgesWithCallouts}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -1656,6 +1711,12 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
                 {documentRootIds.includes(contextMenu.tableId) ? 'Unset Document Root' : 'Set Document Root'}
               </button>
               <button onClick={() => { handleRenameTable(contextMenu.tableId); closeContextMenu() }}>Rename</button>
+              <button onClick={() => { onEditCallout(contextMenu.tableId); closeContextMenu() }}>
+                {callouts[contextMenu.tableId] ? 'Edit Note' : 'Add Note'}
+              </button>
+              {callouts[contextMenu.tableId] && (
+                <button onClick={() => { onRemoveCallout(contextMenu.tableId); closeContextMenu() }}>Remove Note</button>
+              )}
               {table?.originalName && table.originalName !== table.name && (
                 <button onClick={() => { handleResetTableName(contextMenu.tableId); closeContextMenu() }}>Reset name</button>
               )}
@@ -1849,6 +1910,12 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
                   })}
                 </ul>
               </div>
+              <button onClick={() => { onEditCallout(contextMenu.edgeId); closeContextMenu() }}>
+                {callouts[contextMenu.edgeId] ? 'Edit Note' : 'Add Note'}
+              </button>
+              {callouts[contextMenu.edgeId] && (
+                <button onClick={() => { onRemoveCallout(contextMenu.edgeId); closeContextMenu() }}>Remove Note</button>
+              )}
               <button onClick={() => handleDeleteEdge(contextMenu.edgeId)}>Delete</button>
               <button onClick={closeContextMenu}>Close</button>
             </div>

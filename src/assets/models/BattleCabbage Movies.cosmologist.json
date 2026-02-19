@@ -1,0 +1,217 @@
+{
+  "_cosmologist": true,
+  "version": 1,
+  "name": "BattleCabbage Movies",
+  "state": {
+    "projectId": "project-1770673584222",
+    "tablesSources": {
+      "dbo-actors": {
+        "fileName": "dbo.actors",
+        "sourceType": "sqlschema",
+        "name": "dbo.actors"
+      },
+      "dbo-actorstomoviesjoin": {
+        "fileName": "dbo.actorstomoviesjoin",
+        "sourceType": "sqlschema",
+        "name": "dbo.actorstomoviesjoin"
+      },
+      "dbo-criticreviews": {
+        "fileName": "dbo.criticreviews",
+        "sourceType": "sqlschema",
+        "name": "dbo.criticreviews"
+      },
+      "dbo-directors": {
+        "fileName": "dbo.directors",
+        "sourceType": "sqlschema",
+        "name": "dbo.directors"
+      },
+      "dbo-directorstomoviesjoin": {
+        "fileName": "dbo.directorstomoviesjoin",
+        "sourceType": "sqlschema",
+        "name": "dbo.directorstomoviesjoin"
+      },
+      "dbo-genres": {
+        "fileName": "dbo.genres",
+        "sourceType": "sqlschema",
+        "name": "dbo.genres"
+      },
+      "dbo-movies": {
+        "fileName": "dbo.movies",
+        "sourceType": "sqlschema",
+        "name": "dbo.movies"
+      }
+    },
+    "nodePositions": {
+      "dbo-actors": {
+        "x": 120,
+        "y": 80
+      },
+      "dbo-actorstomoviesjoin": {
+        "x": 440,
+        "y": 80
+      },
+      "dbo-criticreviews": {
+        "x": 760,
+        "y": 80
+      },
+      "dbo-directors": {
+        "x": 120,
+        "y": 340
+      },
+      "dbo-directorstomoviesjoin": {
+        "x": 440,
+        "y": 340
+      },
+      "dbo-genres": {
+        "x": 760,
+        "y": 340
+      },
+      "dbo-movies": {
+        "x": 120,
+        "y": 600
+      }
+    },
+    "edges": [
+      {
+        "id": "dbo-actorstomoviesjoin:actor_id__dbo-actors:actor_id",
+        "source": "dbo-actorstomoviesjoin",
+        "target": "dbo-actors",
+        "sourceHandle": "actor_id",
+        "targetHandle": "actor_id",
+        "data": {
+          "type": "one-to-many"
+        }
+      },
+      {
+        "id": "dbo-actorstomoviesjoin:movie_id__dbo-movies:movie_id",
+        "source": "dbo-actorstomoviesjoin",
+        "target": "dbo-movies",
+        "sourceHandle": "movie_id",
+        "targetHandle": "movie_id",
+        "data": {
+          "type": "one-to-many"
+        }
+      },
+      {
+        "id": "dbo-criticreviews:movie_id__dbo-movies:movie_id",
+        "source": "dbo-criticreviews",
+        "target": "dbo-movies",
+        "sourceHandle": "movie_id",
+        "targetHandle": "movie_id",
+        "data": {
+          "type": "one-to-many"
+        }
+      },
+      {
+        "id": "dbo-directorstomoviesjoin:director_id__dbo-directors:director_id",
+        "source": "dbo-directorstomoviesjoin",
+        "target": "dbo-directors",
+        "sourceHandle": "director_id",
+        "targetHandle": "director_id",
+        "data": {
+          "type": "one-to-many"
+        }
+      },
+      {
+        "id": "dbo-directorstomoviesjoin:movie_id__dbo-movies:movie_id",
+        "source": "dbo-directorstomoviesjoin",
+        "target": "dbo-movies",
+        "sourceHandle": "movie_id",
+        "targetHandle": "movie_id",
+        "data": {
+          "type": "one-to-many"
+        }
+      },
+      {
+        "id": "dbo-movies:genre_id__dbo-genres:genre_id",
+        "source": "dbo-movies",
+        "target": "dbo-genres",
+        "sourceHandle": "genre_id",
+        "targetHandle": "genre_id",
+        "data": {
+          "type": "one-to-many"
+        }
+      }
+    ],
+    "rootTableId": "dbo-actors",
+    "leadRowIndex": 0,
+    "selectedColumns": {
+      "dbo-actors": [
+        "actor_id",
+        "actor"
+      ],
+      "dbo-actorstomoviesjoin": [
+        "actor_id",
+        "movie_id"
+      ],
+      "dbo-criticreviews": [
+        "critic_review_id",
+        "movie_id",
+        "critic_score",
+        "critic_review"
+      ],
+      "dbo-directors": [
+        "director_id",
+        "director"
+      ],
+      "dbo-directorstomoviesjoin": [
+        "director_id",
+        "movie_id"
+      ],
+      "dbo-genres": [
+        "genre_id",
+        "genre"
+      ],
+      "dbo-movies": [
+        "movie_id",
+        "external_id",
+        "title",
+        "tagline",
+        "description",
+        "mpaa_rating",
+        "popularity_score",
+        "genre_id",
+        "poster_url",
+        "release_date"
+      ]
+    },
+    "expandedTables": {
+      "dbo-actors": false,
+      "dbo-actorstomoviesjoin": false,
+      "dbo-criticreviews": false,
+      "dbo-directors": false,
+      "dbo-directorstomoviesjoin": false,
+      "dbo-genres": false,
+      "dbo-movies": false
+    },
+    "tableParsingOptions": {
+      "sitedata-zip-sitedata-crosssellitems": {
+        "skipRows": 1,
+        "delimiter": "auto"
+      }
+    },
+    "edgeTypes": {
+      "sitedata-zip-sitedata-catalog-1-ProductId__sitedata-zip-sitedata-crosssellitems-ItemID": "one-to-one"
+    },
+    "tableRenames": {
+      "sitedata-zip-sitedata-catalog-1": "Catalog"
+    },
+    "columnRenames": {},
+    "documentRootIds": [
+      "sitedata-zip-sitedata-catalog-1"
+    ],
+    "sqlSchemaText": "table_schema\ttable_name\tcolumn_name\tordinal_position\tdata_type\tmax_length\tprecision\tscale\tis_nullable\tis_identity\tdefault_value\tis_primary_key\tfk_name\tfk_ref_schema\tfk_ref_table\tfk_ref_column\ndbo\tactors\tactor_id\t1\tint\t4\t10\t0\t0\t1\t\t1\tNULL\tNULL\tNULL\tNULL\ndbo\tactors\tactor\t2\tnvarchar\t1000\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tactorstomoviesjoin\tactor_id\t1\tint\t4\t10\t0\t0\t0\t\t1\tFK_actorstomoviesjoin_actors\tdbo\tactors\tactor_id\ndbo\tactorstomoviesjoin\tmovie_id\t2\tint\t4\t10\t0\t0\t0\t\t1\tFK_actorstomoviesjoin_movies\tdbo\tmovies\tmovie_id\ndbo\tcriticreviews\tcritic_review_id\t1\tint\t4\t10\t0\t0\t1\t\t1\tNULL\tNULL\tNULL\tNULL\ndbo\tcriticreviews\tmovie_id\t2\tint\t4\t10\t0\t0\t0\t\t0\tFK_criticreviews_movies\tdbo\tmovies\tmovie_id\ndbo\tcriticreviews\tcritic_score\t3\tdecimal\t9\t18\t2\t1\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tcriticreviews\tcritic_review\t4\tnvarchar\t8000\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tdirectors\tdirector_id\t1\tint\t4\t10\t0\t0\t1\t\t1\tNULL\tNULL\tNULL\tNULL\ndbo\tdirectors\tdirector\t2\tnvarchar\t1000\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tdirectorstomoviesjoin\tdirector_id\t1\tint\t4\t10\t0\t0\t0\t\t1\tFK_directorstomoviesjoin_directors\tdbo\tdirectors\tdirector_id\ndbo\tdirectorstomoviesjoin\tmovie_id\t2\tint\t4\t10\t0\t0\t0\t\t1\tFK_directorstomoviesjoin_movies\tdbo\tmovies\tmovie_id\ndbo\tgenres\tgenre_id\t1\tint\t4\t10\t0\t0\t1\t\t1\tNULL\tNULL\tNULL\tNULL\ndbo\tgenres\tgenre\t2\tnvarchar\t200\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\tmovie_id\t1\tint\t4\t10\t0\t0\t1\t\t1\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\texternal_id\t2\tnvarchar\t60\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\ttitle\t3\tnvarchar\t200\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\ttagline\t4\tnvarchar\t1000\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\tdescription\t5\tnvarchar\t4000\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\tmpaa_rating\t6\tnvarchar\t10\t0\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\tpopularity_score\t7\tdecimal\t9\t18\t2\t1\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\tgenre_id\t8\tint\t4\t10\t0\t0\t0\t\t0\tFK_movies_genres\tdbo\tgenres\tgenre_id\ndbo\tmovies\tposter_url\t9\tnvarchar\t1000\t0\t0\t1\t0\t\t0\tNULL\tNULL\tNULL\tNULL\ndbo\tmovies\trelease_date\t10\tdate\t3\t10\t0\t0\t0\t\t0\tNULL\tNULL\tNULL\tNULL\n",
+    "columnSplits": [
+      {
+        "tableId": "sitedata-zip-sitedata-catalog-1",
+        "column": "Att1Id",
+        "delimiter": ","
+      }
+    ],
+    "tablePivots": [],
+    "edgeColumnFilters": {},
+    "edgeMaxDepth": {},
+    "edgePropertyNames": {}
+  },
+  "sources": {}
+}
