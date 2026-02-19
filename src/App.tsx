@@ -38,6 +38,7 @@ import JsonTree from './components/JsonTree'
 import { estimateRu, type RuEstimate } from './lib/ru'
 import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transforms'
 import logoUrl from './assets/logo.svg'
+import { getEmbeddedModel } from './lib/models'
 
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
@@ -123,6 +124,7 @@ function App() {
   const loadInputRef = useRef<HTMLInputElement>(null)
   const addInputRef = useRef<HTMLInputElement>(null)
   const dragCounterRef = useRef(0)
+  const modelLoadedRef = useRef(false)
 
   const closeMenus = useCallback(() => setMenuOpen(null), [])
 
@@ -155,6 +157,24 @@ function App() {
       setProjectId(list[0].id)
     }
   }, [])
+
+  // Auto-load embedded model from ?model= query param
+  useEffect(() => {
+    if (modelLoadedRef.current || !projects.length) return
+    const params = new URLSearchParams(window.location.search)
+    const slug = params.get('model')
+    if (!slug) return
+    const model = getEmbeddedModel(slug)
+    if (!model) return
+    modelLoadedRef.current = true
+    importProject(model).then((meta) => {
+      setProjects((prev) => [...prev, meta])
+      setProjectId(meta.id)
+      params.delete('model')
+      const qs = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''))
+    })
+  }, [projects])
 
   useEffect(() => {
     if (!projectId) return
