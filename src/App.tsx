@@ -163,6 +163,7 @@ function App() {
   const history = useHistory<HistorySnapshot>(50)
   const skipHistoryRef = useRef(false)
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebarWidth')
@@ -262,36 +263,40 @@ function App() {
 
   useEffect(() => {
     if (!hydrated || !projectId) return
-    const tablesSources = Object.fromEntries(
-      tables.map((t) => [t.id, { fileName: t.fileName, sourceType: t.sourceType, name: t.name }]),
-    )
-    tables.forEach((t) => {
-      if (t.sourceText) setProjectSource(projectId, t.id, t.sourceText)
-    })
-    const nodePositions = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
-    const ok = saveProject(projectId, {
-      projectId,
-      tablesSources,
-      nodePositions,
-      edges,
-      rootTableId,
-      leadRowIndex,
-      selectedColumns,
-      expandedTables,
-      tableParsingOptions,
-      edgeTypes,
-      tableRenames,
-      columnRenames,
-      documentRootIds,
-      sqlSchemaText: sqlSchemaSource,
-      columnSplits,
-      tablePivots,
-      edgeColumnFilters,
-      edgeMaxDepth,
-      edgePropertyNames,
-      callouts,
-    } as any)
-    setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    persistTimerRef.current = setTimeout(() => {
+      const tablesSources = Object.fromEntries(
+        tables.map((t) => [t.id, { fileName: t.fileName, sourceType: t.sourceType, name: t.name }]),
+      )
+      tables.forEach((t) => {
+        if (t.sourceText) setProjectSource(projectId, t.id, t.sourceText)
+      })
+      const nodePositions = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
+      const ok = saveProject(projectId, {
+        projectId,
+        tablesSources,
+        nodePositions,
+        edges,
+        rootTableId,
+        leadRowIndex,
+        selectedColumns,
+        expandedTables,
+        tableParsingOptions,
+        edgeTypes,
+        tableRenames,
+        columnRenames,
+        documentRootIds,
+        sqlSchemaText: sqlSchemaSource,
+        columnSplits,
+        tablePivots,
+        edgeColumnFilters,
+        edgeMaxDepth,
+        edgePropertyNames,
+        callouts,
+      } as any)
+      setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
+    }, 500)
+    return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
   }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts])
 
   // Debounced history capture: push a snapshot whenever tracked state changes
