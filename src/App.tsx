@@ -39,6 +39,7 @@ import { estimateRu, type RuEstimate } from './lib/ru'
 import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transforms'
 import logoUrl from './assets/logo.svg'
 import { getEmbeddedModel } from './lib/models'
+import { useHistory } from './lib/useHistory'
 
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
@@ -135,6 +136,31 @@ function App() {
   useEffect(() => { nodesRef.current = nodes }, [nodes])
   useEffect(() => { edgesRef.current = edges }, [edges])
   useEffect(() => { tablesRef.current = tables }, [tables])
+
+  // ---------- Undo / Redo ----------
+  type HistorySnapshot = {
+    tables: TableData[]
+    nodePositions: Record<string, { x: number; y: number }>
+    edges: Edge[]
+    edgeTypes: Record<string, 'one-to-many' | 'one-to-one'>
+    edgeColumnFilters: Record<string, string[]>
+    edgeMaxDepth: Record<string, number>
+    edgePropertyNames: Record<string, string>
+    rootTableId: string
+    leadRowIndex: number
+    selectedColumns: Record<string, string[]>
+    expandedTables: Record<string, boolean>
+    tableRenames: Record<string, string>
+    columnRenames: Record<string, Record<string, string>>
+    columnSplits: ColumnSplit[]
+    tablePivots: TablePivot[]
+    documentRootIds: string[]
+    callouts: Record<string, string>
+  }
+
+  const history = useHistory<HistorySnapshot>(50)
+  const skipHistoryRef = useRef(false)
+  const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebarWidth')
@@ -265,6 +291,23 @@ function App() {
     } as any)
     setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
   }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts])
+
+  // Debounced history capture: push a snapshot whenever tracked state changes
+  useEffect(() => {
+    if (!hydrated || skipHistoryRef.current) return
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current)
+    const nodePositions = Object.fromEntries(nodesRef.current.map((n) => [n.id, n.position]))
+    const snapshot: HistorySnapshot = {
+      tables, nodePositions, edges, edgeTypes, edgeColumnFilters, edgeMaxDepth,
+      edgePropertyNames, rootTableId, leadRowIndex, selectedColumns, expandedTables,
+      tableRenames, columnRenames, columnSplits, tablePivots, documentRootIds, callouts,
+    }
+    historyTimerRef.current = setTimeout(() => { history.push(snapshot) }, 300)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, tables, edges, edgeTypes, edgeColumnFilters, edgeMaxDepth, edgePropertyNames,
+    rootTableId, leadRowIndex, selectedColumns, expandedTables, tableRenames, columnRenames,
+    columnSplits, tablePivots, documentRootIds, callouts])
+
   const onFiles = useCallback(async (files: FileList | File[]) => {
     const { tables: parsed, errors } = await parseFiles(files)
     setErrors(errors)
@@ -520,6 +563,63 @@ function App() {
       return next
     })
   }, [])
+
+  // Restore a history snapshot (must be after onColumnContextMenu / onEditCallout / onRemoveCallout)
+  const restoreSnapshot = useCallback((snapshot: HistorySnapshot) => {
+    skipHistoryRef.current = true
+    if (historyTimerRef.current) clearTimeout(historyTimerRef.current)
+    setTables(snapshot.tables)
+    setNodes(snapshot.tables.map((t) => ({
+      id: t.id,
+      type: 'tableNode',
+      position: snapshot.nodePositions[t.id] ?? { x: 0, y: 0 },
+      data: { table: t, isRoot: snapshot.rootTableId === t.id, onColumnContextMenu, onEditCallout, onRemoveCallout },
+    })))
+    setEdges(snapshot.edges)
+    setEdgeTypes(snapshot.edgeTypes)
+    setEdgeColumnFilters(snapshot.edgeColumnFilters)
+    setEdgeMaxDepth(snapshot.edgeMaxDepth)
+    setEdgePropertyNames(snapshot.edgePropertyNames)
+    setRootTableId(snapshot.rootTableId)
+    setLeadRowIndex(snapshot.leadRowIndex)
+    setSelectedColumns(snapshot.selectedColumns)
+    setExpandedTables(snapshot.expandedTables)
+    setTableRenames(snapshot.tableRenames)
+    setColumnRenames(snapshot.columnRenames)
+    setColumnSplits(snapshot.columnSplits)
+    setTablePivots(snapshot.tablePivots)
+    setDocumentRootIds(snapshot.documentRootIds)
+    setCallouts(snapshot.callouts)
+    setTimeout(() => { skipHistoryRef.current = false }, 400)
+  }, [onColumnContextMenu, onEditCallout, onRemoveCallout])
+
+  const handleUndo = useCallback(() => {
+    const snapshot = history.undo()
+    if (snapshot) restoreSnapshot(snapshot)
+  }, [history, restoreSnapshot])
+
+  const handleRedo = useCallback(() => {
+    const snapshot = history.redo()
+    if (snapshot) restoreSnapshot(snapshot)
+  }, [history, restoreSnapshot])
+
+  // Keyboard shortcuts: Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z for redo)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+      if (inInput) return
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault()
+        handleUndo()
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault()
+        handleRedo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleUndo, handleRedo])
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
@@ -1113,6 +1213,10 @@ function App() {
             )}
           </div>
         </nav>
+        <div className="undo-redo-bar">
+          <button className="menu-button" onClick={handleUndo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">↩</button>
+          <button className="menu-button" onClick={handleRedo} disabled={!history.canRedo} title="Redo (Ctrl+Y)">↪</button>
+        </div>
         <div className="project-title" title={currentProjectName}>{currentProjectName}</div>
         <div className="app-brand">
           <button
