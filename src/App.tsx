@@ -565,6 +565,7 @@ function App() {
 
   const onEdgeClick: EdgeMouseHandler = useCallback((event, edge) => {
     if (!callouts[edge.id]) return
+    event.stopPropagation()
     setEdgeCalloutPopover({ edgeId: edge.id, x: event.clientX, y: event.clientY })
   }, [callouts])
 
