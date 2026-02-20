@@ -44,6 +44,9 @@ import { useHistory } from './lib/useHistory'
 
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
+const GIT_COMMIT = import.meta.env.VITE_GIT_COMMIT ?? ''
+const IS_DEV = import.meta.env.VITE_IS_DEV === 'true'
+const VERSION_DISPLAY = IS_DEV && GIT_COMMIT ? `${VERSION}-dev (${GIT_COMMIT})` : VERSION
 const AUTHOR = 'Cosmologist'
 const GITHUB_URL = import.meta.env.VITE_APP_GITHUB_URL ?? 'https://github.com/cbattlegear/Cosmologist'
 
@@ -163,6 +166,7 @@ function App() {
   const history = useHistory<HistorySnapshot>(50)
   const skipHistoryRef = useRef(false)
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('sidebarWidth')
@@ -183,9 +187,15 @@ function App() {
       setHydrated(true)
     } else {
       setProjects(list)
-      setProjectId(list[0].id)
+      const lastId = localStorage.getItem('cosmologist:lastProjectId')
+      const validLast = lastId && list.some((p) => p.id === lastId)
+      setProjectId(validLast ? lastId : list[0].id)
     }
   }, [])
+
+  useEffect(() => {
+    if (projectId) localStorage.setItem('cosmologist:lastProjectId', projectId)
+  }, [projectId])
 
   // Auto-load embedded model from ?model= query param
   useEffect(() => {
@@ -262,36 +272,40 @@ function App() {
 
   useEffect(() => {
     if (!hydrated || !projectId) return
-    const tablesSources = Object.fromEntries(
-      tables.map((t) => [t.id, { fileName: t.fileName, sourceType: t.sourceType, name: t.name }]),
-    )
-    tables.forEach((t) => {
-      if (t.sourceText) setProjectSource(projectId, t.id, t.sourceText)
-    })
-    const nodePositions = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
-    const ok = saveProject(projectId, {
-      projectId,
-      tablesSources,
-      nodePositions,
-      edges,
-      rootTableId,
-      leadRowIndex,
-      selectedColumns,
-      expandedTables,
-      tableParsingOptions,
-      edgeTypes,
-      tableRenames,
-      columnRenames,
-      documentRootIds,
-      sqlSchemaText: sqlSchemaSource,
-      columnSplits,
-      tablePivots,
-      edgeColumnFilters,
-      edgeMaxDepth,
-      edgePropertyNames,
-      callouts,
-    } as any)
-    setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
+    persistTimerRef.current = setTimeout(() => {
+      const tablesSources = Object.fromEntries(
+        tables.map((t) => [t.id, { fileName: t.fileName, sourceType: t.sourceType, name: t.name }]),
+      )
+      tables.forEach((t) => {
+        if (t.sourceText) setProjectSource(projectId, t.id, t.sourceText)
+      })
+      const nodePositions = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
+      const ok = saveProject(projectId, {
+        projectId,
+        tablesSources,
+        nodePositions,
+        edges,
+        rootTableId,
+        leadRowIndex,
+        selectedColumns,
+        expandedTables,
+        tableParsingOptions,
+        edgeTypes,
+        tableRenames,
+        columnRenames,
+        documentRootIds,
+        sqlSchemaText: sqlSchemaSource,
+        columnSplits,
+        tablePivots,
+        edgeColumnFilters,
+        edgeMaxDepth,
+        edgePropertyNames,
+        callouts,
+      } as any)
+      setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
+    }, 500)
+    return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
   }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts])
 
   // Debounced history capture: push a snapshot whenever tracked state changes
@@ -391,12 +405,28 @@ function App() {
   }, [tablePreviewTable, tablePreviewTransformed, tablePreviewHasTransforms, tablePreviewRows])
 
   useEffect(() => {
-    setNodes((prev) => prev.map((n) => {
-      const splitCols = new Set(columnSplits.filter((s) => s.tableId === n.id).map((s) => s.column))
-      const hasPivot = tablePivots.some((p) => p.tableId === n.id)
-      const callout = callouts[n.id]
-      return { ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id), splitColumns: splitCols, hasPivot, callout } }
-    }))
+    setNodes((prev) => {
+      let changed = false
+      const next = prev.map((n) => {
+        const splitCols = columnSplits.filter((s) => s.tableId === n.id).map((s) => s.column)
+        const hasPivot = tablePivots.some((p) => p.tableId === n.id)
+        const callout = callouts[n.id]
+        const isRoot = n.id === rootTableId
+        const isDocRoot = documentRootIds.includes(n.id)
+        // Skip update if nothing changed for this node
+        if (
+          n.data.isRoot === isRoot &&
+          n.data.isDocRoot === isDocRoot &&
+          n.data.hasPivot === hasPivot &&
+          n.data.callout === callout &&
+          splitCols.length === (n.data.splitColumns?.size ?? 0) &&
+          splitCols.every((c) => n.data.splitColumns?.has(c))
+        ) return n
+        changed = true
+        return { ...n, data: { ...n.data, isRoot, isDocRoot, splitColumns: new Set(splitCols), hasPivot, callout } }
+      })
+      return changed ? next : prev
+    })
   }, [rootTableId, documentRootIds, columnSplits, tablePivots, callouts])
 
   const relationshipsSummaries = useMemo(() => {
@@ -414,20 +444,7 @@ function App() {
     return edges.map((e) => {
       const note = callouts[e.id]
       if (!note) return e
-      return {
-        ...e,
-        label: (
-          <span
-            className="callout-icon"
-            title="View note"
-            style={{ cursor: 'pointer', fontSize: '0.9rem' }}
-            onClick={(ev: React.MouseEvent) => {
-              ev.stopPropagation()
-              setEdgeCalloutPopover({ edgeId: e.id, x: ev.clientX, y: ev.clientY })
-            }}
-          >📝</span>
-        ),
-      }
+      return { ...e, label: '📝' }
     })
   }, [edges, callouts])
 
@@ -545,6 +562,11 @@ function App() {
     event.preventDefault()
     setContextMenu({ type: 'edge', x: event.clientX, y: event.clientY, edgeId: edge.id })
   }, [])
+
+  const onEdgeClick: EdgeMouseHandler = useCallback((event, edge) => {
+    if (!callouts[edge.id]) return
+    setEdgeCalloutPopover({ edgeId: edge.id, x: event.clientX, y: event.clientY })
+  }, [callouts])
 
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault()
@@ -737,9 +759,9 @@ function App() {
     setSelectedError(null)
   }, [])
 
-  const applyParsedTablesAndEdges = useCallback((tablesIn: TableData[], edgesIn: Edge[], sqlSchema?: string) => {
+  const applyParsedTablesAndEdges = useCallback(async (tablesIn: TableData[], edgesIn: Edge[], sqlSchema?: string) => {
     const withDummy = tablesIn.some((t) => t.sourceType === 'sqlschema')
-      ? generateDummyRowsForSchema(tablesIn, edgesIn, 10)
+      ? await generateDummyRowsForSchema(tablesIn, edgesIn, 10)
       : tablesIn
     if (sqlSchema) setSqlSchemaSource(sqlSchema)
     setTables(withDummy)
@@ -949,19 +971,21 @@ function App() {
     if (!roots.length) return
     const relationships = toRelationshipEdges(edges, edgeTypes, edgeColumnFilters, edgeMaxDepth, edgePropertyNames)
     const zip = new JSZip()
-    roots.forEach((rid) => {
+    for (const rid of roots) {
       const lead = tables.find((t) => t.id === rid)
-      if (!lead) return
+      if (!lead) continue
       const folder = zip.folder(lead.name) ?? zip
-      lead.rows.forEach((_, idx) => {
+      for (let idx = 0; idx < lead.rows.length; idx++) {
         const doc = buildJoinedDocument(lead.id, idx, tables, relationships, {
           columnsFilter: selectedColumns,
           columnSplits,
           tablePivots,
         })
         folder.file(`${lead.name}_${idx}.json`, JSON.stringify(doc, null, 2))
-      })
-    })
+        // Yield to the event loop every 50 rows to avoid freezing the UI
+        if (idx % 50 === 49) await new Promise((r) => setTimeout(r, 0))
+      }
+    }
     const blob = await zip.generateAsync({ type: 'blob' })
     const name = roots.length === 1 ? (tables.find((t) => t.id === roots[0])?.name ?? 'documents') : 'documents'
     saveAs(blob, `${name}_export.zip`)
@@ -1016,7 +1040,7 @@ function App() {
     const withSource = { ...table, sourceText }
     const recomputed = table.columnRenames ? applyColumnRenames({ ...withSource, rows, columns }, table.columnRenames) : { ...withSource, rows, columns }
     setTables((prev) => prev.map((t) => (t.id === tableId ? recomputed : t)))
-    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { table: recomputed } } : n)))
+    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { ...n.data, table: recomputed } } : n)))
     setEdges((prev) => prev.filter((e) => {
       if (e.source === tableId && e.sourceHandle && !columns.includes(e.sourceHandle)) return false
       if (e.target === tableId && e.targetHandle && !columns.includes(e.targetHandle)) return false
@@ -1400,6 +1424,7 @@ function App() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeDoubleClick={onEdgeDoubleClick}
+          onEdgeClick={onEdgeClick}
           onEdgeContextMenu={onEdgeContextMenu}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={onNodeContextMenu}
@@ -1583,7 +1608,7 @@ function App() {
               </div>
               <div className="modal__body">
                 <p><strong>Cosmologist</strong></p>
-                <p>Version: {VERSION}</p>
+                <p>Version: {VERSION_DISPLAY}</p>
                 <p>Author: {AUTHOR}</p>
                 <p>GitHub: <a href={GITHUB_URL} target="_blank" rel="noreferrer">{GITHUB_URL}</a></p>
               </div>

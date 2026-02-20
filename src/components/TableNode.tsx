@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Handle, Position } from 'reactflow'
 import type { NodeProps } from 'reactflow'
 import type { TableData } from '../lib/types'
@@ -18,7 +18,7 @@ export type TableNodeData = {
   onRemoveCallout?: (tableId: string) => void
 }
 
-export default function TableNode({ data }: NodeProps<TableNodeData>) {
+function TableNodeInner({ data }: NodeProps<TableNodeData>) {
   const [popoverOpen, setPopoverOpen] = useState(false)
   return (
     <div className={["table-node", data.isRoot ? "table-node--root" : "", data.isDocRoot ? "table-node--docroot" : ""].join(" ") }>
@@ -58,3 +58,6 @@ export default function TableNode({ data }: NodeProps<TableNodeData>) {
     </div>
   )
 }
+
+const TableNode = memo(TableNodeInner)
+export default TableNode

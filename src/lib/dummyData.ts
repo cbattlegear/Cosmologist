@@ -1,15 +1,14 @@
-import { faker } from '@faker-js/faker'
 import type { Edge } from 'reactflow'
 import type { TableData } from './types'
 
-const randInt = (min: number, max: number) => faker.number.int({ min, max })
+const randInt = (faker: any, min: number, max: number) => faker.number.int({ min, max })
 
-function genValue(type?: string, maxLength?: number, scale?: number) {
+function genValue(faker: any, type?: string, maxLength?: number, scale?: number) {
   const t = (type ?? '').toLowerCase()
   if (t.includes('uniqueidentifier')) return faker.string.uuid()
-  if (t === 'int' || t === 'integer') return randInt(1, 1_000_000)
-  if (t === 'bigint') return randInt(1, 9_000_000)
-  if (t === 'smallint' || t === 'tinyint') return randInt(1, 1000)
+  if (t === 'int' || t === 'integer') return randInt(faker, 1, 1_000_000)
+  if (t === 'bigint') return randInt(faker, 1, 9_000_000)
+  if (t === 'smallint' || t === 'tinyint') return randInt(faker, 1, 1000)
   if (t === 'decimal' || t === 'numeric' || t.startsWith('decimal') || t.startsWith('numeric')) {
     const s = scale ?? 2
     const factor = Math.pow(10, s)
@@ -25,7 +24,9 @@ function genValue(type?: string, maxLength?: number, scale?: number) {
   return faker.word.noun()
 }
 
-export function generateDummyRowsForSchema(tables: TableData[], edges: Edge[], count = 10): TableData[] {
+export async function generateDummyRowsForSchema(tables: TableData[], edges: Edge[], count = 10): Promise<TableData[]> {
+  const { faker } = await import('@faker-js/faker')
+
   const tableMap = new Map(tables.map((t) => [t.id, t]))
   const parents: Record<string, { targetTableId: string; targetCol: string; sourceCol: string }[]> = {}
   edges.forEach((e) => {
@@ -81,7 +82,7 @@ export function generateDummyRowsForSchema(tables: TableData[], edges: Edge[], c
             return
           }
         }
-        row[col] = genValue(info.dataType)
+        row[col] = genValue(faker, info.dataType)
       })
       rows.push(row)
     }
