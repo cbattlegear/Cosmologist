@@ -36,7 +36,10 @@ import { saveAs } from 'file-saver'
 import TableNode, { type TableNodeData } from './components/TableNode'
 import CalloutPopover from './components/CalloutPopover'
 import JsonTree from './components/JsonTree'
+import AdvisorWizard from './components/AdvisorWizard'
+import AdvisorResults from './components/AdvisorResults'
 import { estimateRu, type RuEstimate } from './lib/ru'
+import type { TableSchema, RelationshipSchema, AdvisorResponse } from './lib/advisorTypes'
 import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transforms'
 import logoUrl from './assets/logo.svg'
 import { getEmbeddedModel } from './lib/models'
@@ -86,7 +89,7 @@ function App() {
   const [selectedError, setSelectedError] = useState<ParseFileError | null>(null)
   const [tablePreviewTableId, setTablePreviewTableId] = useState<string | null>(null)
   const [tablePreviewTransformed, setTablePreviewTransformed] = useState(true)
-  const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'help' | null>(null)
+  const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'tools' | 'help' | null>(null)
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -103,6 +106,8 @@ function App() {
   const [createTableName, setCreateTableName] = useState('')
   const [callouts, setCallouts] = useState<Record<string, string>>({})
   const [edgeCalloutPopover, setEdgeCalloutPopover] = useState<{ edgeId: string; x: number; y: number } | null>(null)
+  const [advisorOpen, setAdvisorOpen] = useState(false)
+  const [advisorResult, setAdvisorResult] = useState<AdvisorResponse | null>(null)
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
@@ -1164,7 +1169,7 @@ function App() {
     })
   }, [projects])
 
-  const toggleMenu = useCallback((menu: 'file' | 'load' | 'help') => {
+  const toggleMenu = useCallback((menu: 'file' | 'load' | 'tools' | 'help') => {
     setMenuOpen((prev) => (prev === menu ? null : menu))
   }, [])
 
@@ -1186,6 +1191,34 @@ function App() {
     }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
+  }, [])
+
+  // Transform app data into advisor-compatible schemas
+  const advisorTables = useMemo<TableSchema[]>(() =>
+    tables.map((t) => ({
+      id: t.id,
+      name: t.name,
+      columns: t.columns.map((c) => ({ name: c, type: t.columnTypes?.[c]?.dataType ?? 'string' })),
+      rowCount: t.rows.length,
+    })),
+    [tables]
+  )
+
+  const advisorRelationships = useMemo<RelationshipSchema[]>(() =>
+    edges.map((e) => ({
+      id: e.id,
+      sourceTableId: e.source,
+      targetTableId: e.target,
+      sourceColumn: (e.data as any)?.sourceColumn ?? e.sourceHandle ?? '',
+      targetColumn: (e.data as any)?.targetColumn ?? e.targetHandle ?? '',
+      type: edgeTypes[e.id] ?? 'one-to-many',
+    })),
+    [edges, edgeTypes]
+  )
+
+  const handleAdvisorResult = useCallback((result: AdvisorResponse) => {
+    setAdvisorResult(result)
+    setAdvisorOpen(false)
   }, [])
 
   return (
@@ -1214,6 +1247,14 @@ function App() {
                 <button onClick={triggerAddFiles}>Add file(s)</button>
                 <button onClick={() => { setSqlSchemaModalOpen(true); closeMenus() }}>Load SQL Server Schema</button>
                 <button onClick={() => { setCreateTableOpen(true); closeMenus() }}>Create Table</button>
+              </div>
+            )}
+          </div>
+          <div className="menu">
+            <button className="menu-button" onClick={() => toggleMenu('tools')}>Tools ▾</button>
+            {menuOpen === 'tools' && (
+              <div className="menu-dropdown" role="menu">
+                <button onClick={() => { setAdvisorOpen(true); closeMenus() }} disabled={!tables.length}>🧠 CosmosDB Advisor</button>
               </div>
             )}
           </div>
@@ -1589,6 +1630,22 @@ function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {advisorOpen && (
+          <AdvisorWizard
+            tables={advisorTables}
+            relationships={advisorRelationships}
+            onClose={() => setAdvisorOpen(false)}
+            onResult={handleAdvisorResult}
+          />
+        )}
+
+        {advisorResult && (
+          <AdvisorResults
+            result={advisorResult}
+            onClose={() => setAdvisorResult(null)}
+          />
         )}
 
         {welcomeOpen && (

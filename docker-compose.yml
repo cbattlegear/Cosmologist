@@ -9,3 +9,15 @@ services:
     ports:
       - "8080:80"
     restart: unless-stopped
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ./api
+    image: cosmologist-api:latest
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    env_file:
+      - ./api/.env

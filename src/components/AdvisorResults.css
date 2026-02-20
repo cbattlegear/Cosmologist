@@ -1,0 +1,26 @@
+.advisor-results {
+  max-width: 95vw !important;
+  width: 95vw;
+  height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.advisor-results__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.advisor-results__diagram {
+  flex: 3;
+  min-width: 0;
+  border-right: 1px solid var(--border-color);
+}
+
+.advisor-results__panel {
+  flex: 2;
+  min-width: 280px;
+  max-width: 400px;
+  overflow-y: auto;
+}
