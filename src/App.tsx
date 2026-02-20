@@ -1037,7 +1037,7 @@ function App() {
     const withSource = { ...table, sourceText }
     const recomputed = table.columnRenames ? applyColumnRenames({ ...withSource, rows, columns }, table.columnRenames) : { ...withSource, rows, columns }
     setTables((prev) => prev.map((t) => (t.id === tableId ? recomputed : t)))
-    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { table: recomputed } } : n)))
+    setNodes((prev) => prev.map((n) => (n.id === tableId ? { ...n, data: { ...n.data, table: recomputed } } : n)))
     setEdges((prev) => prev.filter((e) => {
       if (e.source === tableId && e.sourceHandle && !columns.includes(e.sourceHandle)) return false
       if (e.target === tableId && e.targetHandle && !columns.includes(e.targetHandle)) return false
