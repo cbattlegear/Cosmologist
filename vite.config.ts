@@ -1,14 +1,22 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'fs'
+import { execSync } from 'child_process'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
+let gitCommit = ''
+try {
+  gitCommit = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
+} catch { /* not in a git repo */ }
+
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.VITE_APP_VERSION || pkg.version),
+    'import.meta.env.VITE_GIT_COMMIT': JSON.stringify(gitCommit),
+    'import.meta.env.VITE_IS_DEV': JSON.stringify(mode === 'development'),
   },
   build: {
     chunkSizeWarningLimit: 5000,
@@ -32,4 +40,4 @@ export default defineConfig({
     setupFiles: './src/setupTests.ts',
     css: true,
   },
-})
+}))

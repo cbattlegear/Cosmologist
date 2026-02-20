@@ -44,6 +44,9 @@ import { useHistory } from './lib/useHistory'
 
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
+const GIT_COMMIT = import.meta.env.VITE_GIT_COMMIT ?? ''
+const IS_DEV = import.meta.env.VITE_IS_DEV === 'true'
+const VERSION_DISPLAY = IS_DEV && GIT_COMMIT ? `${VERSION}-dev (${GIT_COMMIT})` : VERSION
 const AUTHOR = 'Cosmologist'
 const GITHUB_URL = import.meta.env.VITE_APP_GITHUB_URL ?? 'https://github.com/cbattlegear/Cosmologist'
 
@@ -1605,7 +1608,7 @@ function App() {
               </div>
               <div className="modal__body">
                 <p><strong>Cosmologist</strong></p>
-                <p>Version: {VERSION}</p>
+                <p>Version: {VERSION_DISPLAY}</p>
                 <p>Author: {AUTHOR}</p>
                 <p>GitHub: <a href={GITHUB_URL} target="_blank" rel="noreferrer">{GITHUB_URL}</a></p>
               </div>
