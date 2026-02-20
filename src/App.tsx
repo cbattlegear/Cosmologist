@@ -184,9 +184,15 @@ function App() {
       setHydrated(true)
     } else {
       setProjects(list)
-      setProjectId(list[0].id)
+      const lastId = localStorage.getItem('cosmologist:lastProjectId')
+      const validLast = lastId && list.some((p) => p.id === lastId)
+      setProjectId(validLast ? lastId : list[0].id)
     }
   }, [])
+
+  useEffect(() => {
+    if (projectId) localStorage.setItem('cosmologist:lastProjectId', projectId)
+  }, [projectId])
 
   // Auto-load embedded model from ?model= query param
   useEffect(() => {
@@ -435,20 +441,7 @@ function App() {
     return edges.map((e) => {
       const note = callouts[e.id]
       if (!note) return e
-      return {
-        ...e,
-        label: (
-          <span
-            className="callout-icon"
-            title="View note"
-            style={{ cursor: 'pointer', fontSize: '0.9rem' }}
-            onClick={(ev: React.MouseEvent) => {
-              ev.stopPropagation()
-              setEdgeCalloutPopover({ edgeId: e.id, x: ev.clientX, y: ev.clientY })
-            }}
-          >📝</span>
-        ),
-      }
+      return { ...e, label: '📝' }
     })
   }, [edges, callouts])
 
@@ -566,6 +559,11 @@ function App() {
     event.preventDefault()
     setContextMenu({ type: 'edge', x: event.clientX, y: event.clientY, edgeId: edge.id })
   }, [])
+
+  const onEdgeClick: EdgeMouseHandler = useCallback((event, edge) => {
+    if (!callouts[edge.id]) return
+    setEdgeCalloutPopover({ edgeId: edge.id, x: event.clientX, y: event.clientY })
+  }, [callouts])
 
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault()
@@ -1423,6 +1421,7 @@ function App() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeDoubleClick={onEdgeDoubleClick}
+          onEdgeClick={onEdgeClick}
           onEdgeContextMenu={onEdgeContextMenu}
           onNodeDoubleClick={onNodeDoubleClick}
           onNodeContextMenu={onNodeContextMenu}
