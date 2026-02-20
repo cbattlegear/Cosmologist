@@ -34,6 +34,7 @@ import { renameColumn as renameColumnData, renameTable as renameTableData, updat
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import TableNode, { type TableNodeData } from './components/TableNode'
+import CalloutPopover from './components/CalloutPopover'
 import JsonTree from './components/JsonTree'
 import { estimateRu, type RuEstimate } from './lib/ru'
 import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transforms'
@@ -101,6 +102,7 @@ function App() {
   const [createTableOpen, setCreateTableOpen] = useState(false)
   const [createTableName, setCreateTableName] = useState('')
   const [callouts, setCallouts] = useState<Record<string, string>>({})
+  const [edgeCalloutPopover, setEdgeCalloutPopover] = useState<{ edgeId: string; x: number; y: number } | null>(null)
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
@@ -412,7 +414,20 @@ function App() {
     return edges.map((e) => {
       const note = callouts[e.id]
       if (!note) return e
-      return { ...e, label: '📝', title: note }
+      return {
+        ...e,
+        label: (
+          <span
+            className="callout-icon"
+            title="View note"
+            style={{ cursor: 'pointer', fontSize: '0.9rem' }}
+            onClick={(ev: React.MouseEvent) => {
+              ev.stopPropagation()
+              setEdgeCalloutPopover({ edgeId: e.id, x: ev.clientX, y: ev.clientY })
+            }}
+          >📝</span>
+        ),
+      }
     })
   }, [edges, callouts])
 
@@ -1377,7 +1392,7 @@ function App() {
 
       </aside>
       <div className="sidebar-resizer" onMouseDown={handleSidebarResize} />
-      <main className="canvas" onClick={closeContextMenu}>
+      <main className="canvas" onClick={() => { closeContextMenu(); setEdgeCalloutPopover(null) }}>
         <ReactFlow
           nodes={nodes}
           edges={edgesWithCallouts}
@@ -2030,6 +2045,16 @@ ORDER BY s.name, t.name, c.column_id;`}</code></pre>
             <h4>Canvas</h4>
             <button onClick={arrangeNodes}>Arrange</button>
             <button onClick={closeContextMenu}>Close</button>
+          </div>
+        )}
+        {edgeCalloutPopover && callouts[edgeCalloutPopover.edgeId] && (
+          <div style={{ position: 'fixed', top: edgeCalloutPopover.y, left: edgeCalloutPopover.x, zIndex: 20 }}>
+            <CalloutPopover
+              text={callouts[edgeCalloutPopover.edgeId]}
+              onEdit={() => { const id = edgeCalloutPopover.edgeId; setEdgeCalloutPopover(null); onEditCallout(id) }}
+              onRemove={() => { const id = edgeCalloutPopover.edgeId; setEdgeCalloutPopover(null); onRemoveCallout(id) }}
+              onClose={() => setEdgeCalloutPopover(null)}
+            />
           </div>
         )}
       </main>
