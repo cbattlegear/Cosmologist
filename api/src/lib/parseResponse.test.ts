@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseAdvisorResponse } from './parseResponse'
+import { parseAdvisorResponse } from './parseResponse.js'
 
 describe('parseAdvisorResponse', () => {
   const validResponse = JSON.stringify({

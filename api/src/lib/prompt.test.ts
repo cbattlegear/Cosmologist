@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildPrompt } from './prompt'
-import type { AdvisorRequest } from '../types'
+import { buildPrompt } from './prompt.js'
+import type { AdvisorRequest } from '../types.js'
 
 describe('buildPrompt', () => {
   const request: AdvisorRequest = {
