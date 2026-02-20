@@ -9,7 +9,7 @@ import { generateDummyRowsForSchema } from './dummyData'
 export async function rehydrateTables(state: ProjectState): Promise<TableData[]> {
   if (state.sqlSchemaText) {
     const { tables } = parseSqlServerSchema(state.sqlSchemaText)
-    const withDummy = generateDummyRowsForSchema(tables, state.edges ?? [], 10)
+    const withDummy = await generateDummyRowsForSchema(tables, state.edges ?? [], 10)
     const renamedTables = applyAllColumnRenames(applyTableRenames(withDummy, state.tableRenames), state.columnRenames)
     return renamedTables
   }

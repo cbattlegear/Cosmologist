@@ -737,9 +737,9 @@ function App() {
     setSelectedError(null)
   }, [])
 
-  const applyParsedTablesAndEdges = useCallback((tablesIn: TableData[], edgesIn: Edge[], sqlSchema?: string) => {
+  const applyParsedTablesAndEdges = useCallback(async (tablesIn: TableData[], edgesIn: Edge[], sqlSchema?: string) => {
     const withDummy = tablesIn.some((t) => t.sourceType === 'sqlschema')
-      ? generateDummyRowsForSchema(tablesIn, edgesIn, 10)
+      ? await generateDummyRowsForSchema(tablesIn, edgesIn, 10)
       : tablesIn
     if (sqlSchema) setSqlSchemaSource(sqlSchema)
     setTables(withDummy)
