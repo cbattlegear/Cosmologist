@@ -396,12 +396,28 @@ function App() {
   }, [tablePreviewTable, tablePreviewTransformed, tablePreviewHasTransforms, tablePreviewRows])
 
   useEffect(() => {
-    setNodes((prev) => prev.map((n) => {
-      const splitCols = new Set(columnSplits.filter((s) => s.tableId === n.id).map((s) => s.column))
-      const hasPivot = tablePivots.some((p) => p.tableId === n.id)
-      const callout = callouts[n.id]
-      return { ...n, data: { ...n.data, isRoot: n.id === rootTableId, isDocRoot: documentRootIds.includes(n.id), splitColumns: splitCols, hasPivot, callout } }
-    }))
+    setNodes((prev) => {
+      let changed = false
+      const next = prev.map((n) => {
+        const splitCols = columnSplits.filter((s) => s.tableId === n.id).map((s) => s.column)
+        const hasPivot = tablePivots.some((p) => p.tableId === n.id)
+        const callout = callouts[n.id]
+        const isRoot = n.id === rootTableId
+        const isDocRoot = documentRootIds.includes(n.id)
+        // Skip update if nothing changed for this node
+        if (
+          n.data.isRoot === isRoot &&
+          n.data.isDocRoot === isDocRoot &&
+          n.data.hasPivot === hasPivot &&
+          n.data.callout === callout &&
+          splitCols.length === (n.data.splitColumns?.size ?? 0) &&
+          splitCols.every((c) => n.data.splitColumns?.has(c))
+        ) return n
+        changed = true
+        return { ...n, data: { ...n.data, isRoot, isDocRoot, splitColumns: new Set(splitCols), hasPivot, callout } }
+      })
+      return changed ? next : prev
+    })
   }, [rootTableId, documentRootIds, columnSplits, tablePivots, callouts])
 
   const relationshipsSummaries = useMemo(() => {
