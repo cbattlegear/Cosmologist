@@ -970,19 +970,21 @@ function App() {
     if (!roots.length) return
     const relationships = toRelationshipEdges(edges, edgeTypes, edgeColumnFilters, edgeMaxDepth, edgePropertyNames)
     const zip = new JSZip()
-    roots.forEach((rid) => {
+    for (const rid of roots) {
       const lead = tables.find((t) => t.id === rid)
-      if (!lead) return
+      if (!lead) continue
       const folder = zip.folder(lead.name) ?? zip
-      lead.rows.forEach((_, idx) => {
+      for (let idx = 0; idx < lead.rows.length; idx++) {
         const doc = buildJoinedDocument(lead.id, idx, tables, relationships, {
           columnsFilter: selectedColumns,
           columnSplits,
           tablePivots,
         })
         folder.file(`${lead.name}_${idx}.json`, JSON.stringify(doc, null, 2))
-      })
-    })
+        // Yield to the event loop every 50 rows to avoid freezing the UI
+        if (idx % 50 === 49) await new Promise((r) => setTimeout(r, 0))
+      }
+    }
     const blob = await zip.generateAsync({ type: 'blob' })
     const name = roots.length === 1 ? (tables.find((t) => t.id === roots[0])?.name ?? 'documents') : 'documents'
     saveAs(blob, `${name}_export.zip`)
