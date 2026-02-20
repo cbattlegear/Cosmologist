@@ -9,10 +9,13 @@ function getIndexedDB(): IDBFactory | null {
 
 let memoryStore = new Map<string, any>()
 
+let dbPromise: Promise<IDBDatabase> | null = null
+
 function openDB(): Promise<IDBDatabase> {
+  if (dbPromise) return dbPromise
   const idb = getIndexedDB()
   if (!idb) return Promise.reject(new Error('indexedDB not available'))
-  return new Promise((resolve, reject) => {
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const req = idb.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = () => {
       const db = req.result
@@ -20,9 +23,14 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_SOURCES)
       }
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      const db = req.result
+      db.onclose = () => { dbPromise = null }
+      resolve(db)
+    }
+    req.onerror = () => { dbPromise = null; reject(req.error) }
   })
+  return dbPromise
 }
 
 export async function idbGet<T = any>(storeName: string, key: string): Promise<T | undefined> {
