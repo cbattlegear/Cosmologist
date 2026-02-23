@@ -41,6 +41,10 @@ import { type ColumnSplit, type TablePivot, applyTransforms } from './lib/transf
 import logoUrl from './assets/logo.svg'
 import { getEmbeddedModel } from './lib/models'
 import { useHistory } from './lib/useHistory'
+import { extractSchemaForAdvisor } from './lib/extractSchema'
+import type { AdvisorResponse } from './lib/advisorTypes'
+import { materializeAdvisorData } from './lib/materializeAdvisor'
+import AdvisorPanel from './components/AdvisorPanel'
 
 const nodeTypes = { tableNode: TableNode }
 const VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0'
@@ -89,7 +93,7 @@ function App() {
   const [selectedError, setSelectedError] = useState<ParseFileError | null>(null)
   const [tablePreviewTableId, setTablePreviewTableId] = useState<string | null>(null)
   const [tablePreviewTransformed, setTablePreviewTransformed] = useState(true)
-  const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'help' | null>(null)
+  const [menuOpen, setMenuOpen] = useState<'file' | 'load' | 'help' | 'tools' | null>(null)
   const [projectsModalOpen, setProjectsModalOpen] = useState<false | 'open' | 'manage'>(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -106,6 +110,8 @@ function App() {
   const [createTableName, setCreateTableName] = useState('')
   const [callouts, setCallouts] = useState<Record<string, string>>({})
   const [edgeCalloutPopover, setEdgeCalloutPopover] = useState<{ edgeId: string; x: number; y: number } | null>(null)
+  const [advisorOpen, setAdvisorOpen] = useState(false)
+  const [advisorNotes, setAdvisorNotes] = useState<AdvisorResponse | null>(null)
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
@@ -165,6 +171,7 @@ function App() {
 
   const history = useHistory<HistorySnapshot>(50)
   const skipHistoryRef = useRef(false)
+  const skipHydrateRef = useRef(false)
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -217,6 +224,11 @@ function App() {
 
   useEffect(() => {
     if (!projectId) return
+    if (skipHydrateRef.current) {
+      skipHydrateRef.current = false
+      setHydrated(true)
+      return
+    }
     const state = loadProject(projectId)
     if (state) {
       rehydrateTables(state as ProjectState).then(async (tables) => {
@@ -248,6 +260,7 @@ function App() {
         setDocumentRootIds(state.documentRootIds ?? (applied.tablesOut[0] ? [applied.tablesOut[0].id] : []))
         setSqlSchemaSource(state.sqlSchemaText ?? '')
         setCallouts((state as any).callouts ?? {})
+        setAdvisorNotes((state as any).advisorNotes ?? null)
       })
     } else {
       setTables([])
@@ -266,6 +279,7 @@ function App() {
       setColumnSplits([])
       setTablePivots([])
       setCallouts({})
+      setAdvisorNotes(null)
     }
     setHydrated(true)
   }, [projectId])
@@ -302,6 +316,7 @@ function App() {
         edgeMaxDepth,
         edgePropertyNames,
         callouts,
+        advisorNotes,
       } as any)
       setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
     }, 500)
@@ -533,6 +548,125 @@ function App() {
     }
     e.target.value = ''
   }, [])
+
+  const handleAdvisorResult = useCallback(async (response: AdvisorResponse) => {
+    setAdvisorOpen(false)
+    console.log('[Advisor] LLM response:', JSON.stringify(response, null, 2))
+
+    // Capture current tables/edges before switching projects
+    const currentTables = tablesRef.current
+    const currentEdges = edgesRef.current
+
+    // Materialize data from source tables into advisor containers
+    const rels = currentEdges
+      .filter((e) => e.sourceHandle && e.targetHandle)
+      .map((e) => ({
+        sourceTableId: e.source,
+        targetTableId: e.target,
+        sourceColumn: e.sourceHandle!,
+        targetColumn: e.targetHandle!,
+      }))
+
+    // Create a new project for the advisor output
+    const name = `Advisor: ${currentProjectName}`
+    const id = makeProjectId(name)
+    const meta = { id, name }
+
+    const advisorTables: TableData[] = []
+    const advisorNodes: Node<TableNodeData>[] = []
+
+    for (let ci = 0; ci < response.containers.length; ci++) {
+      const container = response.containers[ci]
+      const tableId = slugify(container.name) || `container-${ci}`
+      const columns = container.properties.map((p) => p.name)
+      for (const emb of container.embeddedEntities ?? []) {
+        if (!columns.includes(emb.name)) columns.push(emb.name)
+      }
+      const columnTypes: Record<string, { dataType?: string; isPrimaryKey?: boolean }> = {}
+      for (const p of container.properties) {
+        columnTypes[p.name] = { dataType: p.dataType }
+        if (container.partitionKey.replace(/^\//, '') === p.name) {
+          columnTypes[p.name].isPrimaryKey = true
+        }
+      }
+      const pkName = container.partitionKey.replace(/^\//, '')
+
+      // Materialize rows for this container
+      const containerResponse: AdvisorResponse = { ...response, containers: [container] }
+      const materializedRows = materializeAdvisorData(containerResponse, currentTables, rels)
+      console.log(`[Advisor] Container "${container.name}": ${materializedRows.length} rows materialized`)
+
+      const table: TableData = {
+        id: tableId,
+        name: container.name,
+        fileName: `${container.name} (advisor)`,
+        columns,
+        rows: materializedRows,
+        sourceType: 'manual',
+        columnTypes,
+        primaryKeys: [pkName],
+        isDocumentRoot: true,
+      }
+      advisorTables.push(table)
+      advisorNodes.push({
+        id: tableId,
+        type: 'tableNode',
+        position: { x: 120 + (ci % 3) * 380, y: 80 + Math.floor(ci / 3) * 300 },
+        data: { table, isRoot: ci === 0, onColumnContextMenu, onEditCallout, onRemoveCallout },
+      })
+    }
+
+    console.log('[Advisor] Created tables:', advisorTables.map((t) => t.name))
+
+    // Save project metadata + state
+    const selection: Record<string, string[]> = {}
+    const expanded: Record<string, boolean> = {}
+    advisorTables.forEach((t) => { selection[t.id] = [...t.columns]; expanded[t.id] = false })
+
+    const tablesSources = Object.fromEntries(
+      advisorTables.map((t) => [t.id, { fileName: t.fileName, sourceType: t.sourceType, name: t.name }]),
+    )
+    const nodePositions = Object.fromEntries(advisorNodes.map((n) => [n.id, n.position]))
+
+    saveProjectList([...projects, meta])
+    saveProject(id, {
+      projectId: id,
+      tablesSources,
+      nodePositions,
+      edges: [],
+      rootTableId: advisorTables[0]?.id ?? '',
+      leadRowIndex: 0,
+      selectedColumns: selection,
+      expandedTables: expanded,
+      tableParsingOptions: {},
+      edgeTypes: {},
+      documentRootIds: advisorTables.map((t) => t.id),
+      advisorNotes: response,
+    } as any)
+
+    // Directly set state instead of going through rehydrate
+    setTables(advisorTables)
+    setNodes(advisorNodes)
+    setEdges([])
+    setEdgeTypes({})
+    setEdgeColumnFilters({})
+    setEdgeMaxDepth({})
+    setEdgePropertyNames({})
+    setSelectedColumns(selection)
+    setExpandedTables(expanded)
+    setRootTableId(advisorTables[0]?.id ?? '')
+    setLeadRowIndex(0)
+    setDocumentRootIds(advisorTables.map((t) => t.id))
+    setColumnSplits([])
+    setTablePivots([])
+    setCallouts({})
+    setAdvisorNotes(response)
+
+    setProjects((prev) => [...prev, meta])
+    skipHydrateRef.current = true
+    setProjectId(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectName, projects])
 
   const handleTableExpandToggle = useCallback((tableId: string) => {
     setExpandedTables((prev) => ({ ...prev, [tableId]: !prev[tableId] }))
@@ -1189,7 +1323,7 @@ function App() {
     })
   }, [projects])
 
-  const toggleMenu = useCallback((menu: 'file' | 'load' | 'help') => {
+  const toggleMenu = useCallback((menu: 'file' | 'load' | 'help' | 'tools') => {
     setMenuOpen((prev) => (prev === menu ? null : menu))
   }, [])
 
@@ -1249,6 +1383,14 @@ function App() {
                 <button onClick={() => { setWelcomeOpen(true); closeMenus() }}>Welcome Guide</button>
                 <button onClick={() => { setHelpOpen(true); closeMenus() }}>Help</button>
                 <button onClick={() => { setAboutOpen(true); closeMenus() }}>About</button>
+              </div>
+            )}
+          </div>
+          <div className="menu">
+            <button className="menu-button" onClick={() => toggleMenu('tools')}>Tools ▾</button>
+            {menuOpen === 'tools' && (
+              <div className="menu-dropdown" role="menu">
+                <button onClick={() => { setAdvisorOpen(true); closeMenus() }} disabled={!tables.length}>Data Model Advisor</button>
               </div>
             )}
           </div>
@@ -1414,6 +1556,35 @@ function App() {
             <div>Relationships: {edges.length}</div>
           </div>
         </section>
+
+        {advisorNotes && (
+          <section className="advisor-reasoning">
+            <h2>Advisor Notes</h2>
+            <h4>Reasoning</h4>
+            <p>{advisorNotes.reasoning}</p>
+            {advisorNotes.tradeoffs && advisorNotes.tradeoffs.length > 0 && (
+              <>
+                <h4>Trade-offs</h4>
+                <ul>
+                  {advisorNotes.tradeoffs.map((t, i) => (
+                    <li key={i}><span className="advisor-tag advisor-tag--tradeoff">Trade-off</span>{t}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {advisorNotes.warnings && advisorNotes.warnings.length > 0 && (
+              <>
+                <h4>Warnings</h4>
+                <ul>
+                  {advisorNotes.warnings.map((w, i) => (
+                    <li key={i}><span className="advisor-tag advisor-tag--warning">Warning</span>{w}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <button className="advisor-dismiss" onClick={() => setAdvisorNotes(null)}>Dismiss Notes</button>
+          </section>
+        )}
 
       </aside>
       <div className="sidebar-resizer" onMouseDown={handleSidebarResize} />
@@ -1650,6 +1821,14 @@ function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {advisorOpen && (
+          <AdvisorPanel
+            schema={extractSchemaForAdvisor(tables, edges, edgeTypes)}
+            onResult={handleAdvisorResult}
+            onClose={() => setAdvisorOpen(false)}
+          />
         )}
 
         {sqlSchemaModalOpen && (
