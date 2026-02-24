@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   app:
     build:
@@ -8,4 +7,14 @@ services:
     image: cosmologist:latest
     ports:
       - "8080:80"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+    image: cosmologist-api:latest
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./api/.env
     restart: unless-stopped

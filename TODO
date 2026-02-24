@@ -9,16 +9,16 @@
 [x] Auto Expand Sidebar for text
 [x] Allow sidebar resize
 [x] Make sure Table nodes don't have bottom scroll bars
-[x] Duplicate Projects
+[x] Duplicate Project
 [x] Add Delete function to Right click menus for all columns and tables
 [x] Verify Table view shows properly
 [x] Make connection points more obvious/outside of boxes
 
 ## Data Modeling
 [x] Schema Mapping/Pivots with Regex
-Embed related data/potentially recursive
+[x] Embed related data/potentially recursive
 [x] RU Estimation (based on https://cosmos.azure.com/capacitycalculator/)
 
 ## Nice to have
-Right click on canvas, Arrange (move nodes to logical spots based on relationships)
+[x] Right click on canvas, Arrange (move nodes to logical spots based on relationships)
 Linkable public projects (maybe export full model to single JSO and can load from URL?)
