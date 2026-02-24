@@ -55,7 +55,7 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
 // ── Static files ──
 app.use(express.static(path.join(__dirname, '..', 'public')))
-app.get('*', (_req, res) =>
+app.get('{*path}', (_req, res) =>
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html')),
 )
 
