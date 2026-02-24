@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advisor Session Viewer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🔭 Cosmologist — Advisor Sessions</h1>
+  </header>
+
+  <div id="app">
+    <aside id="session-list">
+      <div class="list-header">Sessions</div>
+      <div id="sessions-loading" class="loading">Loading…</div>
+      <ul id="sessions"></ul>
+    </aside>
+    <main id="detail">
+      <div id="detail-empty" class="empty-state">Select a session to view details</div>
+      <div id="detail-content" class="hidden">
+        <div class="detail-header">
+          <h2 id="detail-title"></h2>
+          <div class="detail-meta">
+            <span id="detail-time"></span>
+            <span id="detail-duration"></span>
+            <span id="detail-status"></span>
+          </div>
+        </div>
+
+        <div id="detail-error" class="error-banner hidden"></div>
+
+        <div class="panels">
+          <section class="panel">
+            <h3>Original Schema</h3>
+            <div id="panel-schema"></div>
+          </section>
+          <section class="panel">
+            <h3>AI Notes</h3>
+            <div id="panel-notes"></div>
+          </section>
+          <section class="panel">
+            <h3>Suggested Model</h3>
+            <div id="panel-model"></div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
