@@ -48,3 +48,5 @@ Then open http://localhost:8080
 - React 19, Vite, TypeScript
 - React Flow, PapaParse, JSZip, FileSaver
 - Vitest, Testing Library
+
+New API added
