@@ -205,6 +205,76 @@
   font-size: 0.85rem;
 }
 
+/* Analyzing modal */
+.advisor-analyzing-modal {
+  width: min(95vw, 500px);
+}
+
+.advisor-analyzing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1.5rem;
+  gap: 1.5rem;
+}
+
+.advisor-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-secondary);
+  border-top-color: var(--accent-purple, #8b5cf6);
+  border-radius: 50%;
+  animation: advisor-spin 0.8s linear infinite;
+}
+
+@keyframes advisor-spin {
+  to { transform: rotate(360deg); }
+}
+
+.advisor-phase-log {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.advisor-phase {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  padding: 0.3rem 0;
+}
+
+.advisor-phase--done {
+  color: var(--text-muted);
+}
+
+.advisor-phase--active {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.advisor-phase__icon {
+  width: 1.2rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.advisor-phase--done .advisor-phase__icon {
+  color: var(--success-text, #22c55e);
+}
+
+.advisor-phase--active .advisor-phase__icon {
+  color: var(--accent-purple, #8b5cf6);
+  animation: advisor-pulse 1s ease-in-out infinite;
+}
+
+@keyframes advisor-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Reasoning panel (sidebar) */
 .advisor-reasoning {
   padding: 0.75rem;

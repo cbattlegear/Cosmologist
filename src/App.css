@@ -15,6 +15,48 @@
   margin-left: auto;
 }
 
+.beta-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  user-select: none;
+}
+.beta-toggle input { display: none; }
+.beta-toggle__slider {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background: var(--bg-tertiary, #555);
+  border-radius: 9px;
+  transition: background 0.2s;
+}
+.beta-toggle__slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--text-secondary, #ccc);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+.beta-toggle input:checked + .beta-toggle__slider {
+  background: var(--accent, #58f);
+}
+.beta-toggle input:checked + .beta-toggle__slider::after {
+  transform: translateX(14px);
+  background: #fff;
+}
+.beta-toggle__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
 .app-logo {
   width: 26px;
   height: 26px;

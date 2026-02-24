@@ -1,4 +1,5 @@
 import type { Edge } from 'reactflow'
+import type { AdvisorResponse } from './advisorTypes'
 import { idbSet, idbGet, STORE_SOURCES } from './idb'
 
 export type ProjectMeta = { id: string; name: string }
@@ -17,6 +18,7 @@ export type ProjectState = {
   columnRenames?: Record<string, Record<string, string>> // tableId -> original -> current
   documentRootIds?: string[]
   sqlSchemaText?: string
+  advisorNotes?: AdvisorResponse | null
 }
 
 const PROJECT_LIST_KEY = 'cosmologist:projects'

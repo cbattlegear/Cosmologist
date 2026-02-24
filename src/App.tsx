@@ -113,6 +113,9 @@ function App() {
   const [advisorOpen, setAdvisorOpen] = useState(false)
   const [advisorNotes, setAdvisorNotes] = useState<AdvisorResponse | null>(null)
 
+  const [betaFeatures, setBetaFeatures] = useState(() => localStorage.getItem('cosmologist_beta') === '1')
+  const [betaWarningOpen, setBetaWarningOpen] = useState(false)
+
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
     if (stored) return stored
@@ -229,6 +232,7 @@ function App() {
       setHydrated(true)
       return
     }
+    setHydrated(false) // prevent persist effect from saving stale data during async rehydration
     const state = loadProject(projectId)
     if (state) {
       rehydrateTables(state as ProjectState).then(async (tables) => {
@@ -260,7 +264,8 @@ function App() {
         setDocumentRootIds(state.documentRootIds ?? (applied.tablesOut[0] ? [applied.tablesOut[0].id] : []))
         setSqlSchemaSource(state.sqlSchemaText ?? '')
         setCallouts((state as any).callouts ?? {})
-        setAdvisorNotes((state as any).advisorNotes ?? null)
+        setAdvisorNotes(state.advisorNotes ?? null)
+        setHydrated(true)
       })
     } else {
       setTables([])
@@ -280,8 +285,8 @@ function App() {
       setTablePivots([])
       setCallouts({})
       setAdvisorNotes(null)
+      setHydrated(true)
     }
-    setHydrated(true)
   }, [projectId])
 
   useEffect(() => {
@@ -292,7 +297,14 @@ function App() {
         tables.map((t) => [t.id, { fileName: t.fileName, sourceType: t.sourceType, name: t.name }]),
       )
       tables.forEach((t) => {
-        if (t.sourceText) setProjectSource(projectId, t.id, t.sourceText)
+        if (t.sourceType === 'manual') {
+          setProjectSource(projectId, t.id, JSON.stringify({
+            columns: t.columns, rows: t.rows, columnTypes: t.columnTypes,
+            primaryKeys: t.primaryKeys, isDocumentRoot: t.isDocumentRoot,
+          }))
+        } else if (t.sourceText) {
+          setProjectSource(projectId, t.id, t.sourceText)
+        }
       })
       const nodePositions = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
       const ok = saveProject(projectId, {
@@ -321,7 +333,7 @@ function App() {
       setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
     }, 500)
     return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
-  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts])
+  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts, advisorNotes])
 
   // Debounced history capture: push a snapshot whenever tracked state changes
   useEffect(() => {
@@ -643,8 +655,16 @@ function App() {
       documentRootIds: advisorTables.map((t) => t.id),
       advisorNotes: response,
     } as any)
+    // Persist materialized rows to IDB so the project survives rehydration
+    for (const t of advisorTables) {
+      await setProjectSource(id, t.id, JSON.stringify({
+        columns: t.columns, rows: t.rows, columnTypes: t.columnTypes,
+        primaryKeys: t.primaryKeys, isDocumentRoot: t.isDocumentRoot,
+      }))
+    }
 
-    // Directly set state instead of going through rehydrate
+    // Directly set state instead of going through rehydrate — reset ALL fields
+    // to avoid leaking source-project state (e.g. sqlSchemaSource) into the advisor project
     setTables(advisorTables)
     setNodes(advisorNodes)
     setEdges([])
@@ -661,6 +681,10 @@ function App() {
     setTablePivots([])
     setCallouts({})
     setAdvisorNotes(response)
+    setSqlSchemaSource('')
+    setTableParsingOptions({})
+    setTableRenames({})
+    setColumnRenames({})
 
     setProjects((prev) => [...prev, meta])
     skipHydrateRef.current = true
@@ -1390,7 +1414,7 @@ function App() {
             <button className="menu-button" onClick={() => toggleMenu('tools')}>Tools ▾</button>
             {menuOpen === 'tools' && (
               <div className="menu-dropdown" role="menu">
-                <button onClick={() => { setAdvisorOpen(true); closeMenus() }} disabled={!tables.length}>Data Model Advisor</button>
+                <button onClick={() => { setAdvisorOpen(true); closeMenus() }} disabled={!tables.length || !betaFeatures} title={!betaFeatures ? 'Enable Beta Features to use the Data Model Advisor' : undefined}>Data Model Advisor{!betaFeatures ? ' 🔒' : ' ᵝ'}</button>
               </div>
             )}
           </div>
@@ -1401,6 +1425,22 @@ function App() {
         </div>
         <div className="project-title" title={currentProjectName}>{currentProjectName}</div>
         <div className="app-brand">
+          <label className="beta-toggle" title={betaFeatures ? 'Disable beta features' : 'Enable beta features'}>
+            <input
+              type="checkbox"
+              checked={betaFeatures}
+              onChange={() => {
+                if (!betaFeatures) {
+                  setBetaWarningOpen(true)
+                } else {
+                  setBetaFeatures(false)
+                  localStorage.removeItem('cosmologist_beta')
+                }
+              }}
+            />
+            <span className="beta-toggle__slider" />
+            <span className="beta-toggle__label">Beta</span>
+          </label>
           <button
             onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.25rem', lineHeight: 1 }}
@@ -1828,7 +1868,28 @@ function App() {
             schema={extractSchemaForAdvisor(tables, edges, edgeTypes)}
             onResult={handleAdvisorResult}
             onClose={() => setAdvisorOpen(false)}
+            apiBaseUrl={import.meta.env.VITE_API_URL}
           />
+        )}
+
+        {betaWarningOpen && (
+          <div className="modal" onClick={() => setBetaWarningOpen(false)}>
+            <div className="modal__content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal__header">
+                <h3>Enable Beta Features</h3>
+                <button onClick={() => setBetaWarningOpen(false)}>Close</button>
+              </div>
+              <div className="modal__body">
+                <p><strong>⚠️ The Data Model Advisor is currently in beta and may provide incorrect information.</strong></p>
+                <p>When using the Data Model Advisor, your data model will be sent to Azure for processing. During the beta period, submitted data models may be reviewed by a person for quality and safety purposes.</p>
+                <p>By enabling beta features you acknowledge and accept these conditions.</p>
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                  <button onClick={() => setBetaWarningOpen(false)}>Cancel</button>
+                  <button onClick={() => { setBetaFeatures(true); localStorage.setItem('cosmologist_beta', '1'); setBetaWarningOpen(false) }}>Enable Beta Features</button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {sqlSchemaModalOpen && (
