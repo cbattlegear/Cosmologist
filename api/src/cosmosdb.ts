@@ -58,7 +58,7 @@ export async function saveAdvisorSession(session: AdvisorSession): Promise<void>
 }
 
 export async function updateAdvisorFeedback(
-  sessionId: string,
+  id: string,
   feedback: { rating: 'up' | 'down'; comment: string },
 ): Promise<void> {
   const container = getContainer()
@@ -68,18 +68,15 @@ export async function updateAdvisorFeedback(
   }
 
   try {
-    const { resources } = await container.items
-      .query({ query: 'SELECT * FROM c WHERE c.sessionId = @id', parameters: [{ name: '@id', value: sessionId }] })
-      .fetchAll()
-    if (!resources.length) {
-      console.warn(`[CosmosDB] Session ${sessionId} not found for feedback update`)
+    const { resource: doc } = await container.item(id, id).read<AdvisorSession>()
+    if (!doc) {
+      console.warn(`[CosmosDB] Session ${id} not found for feedback update`)
       return
     }
-    const doc = resources[0]
     doc.feedback = { ...feedback, timestamp: new Date().toISOString() }
-    await container.items.upsert(doc)
-    console.log(`[CosmosDB] Updated feedback for session ${sessionId}`)
+    await container.item(id, id).replace(doc)
+    console.log(`[CosmosDB] Updated feedback for session ${id}`)
   } catch (err: any) {
-    console.error(`[CosmosDB] Failed to update feedback for session ${sessionId}:`, err.message)
+    console.error(`[CosmosDB] Failed to update feedback for session ${id}:`, err.message)
   }
 }
