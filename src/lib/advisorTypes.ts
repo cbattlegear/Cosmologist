@@ -68,9 +68,18 @@ export interface RecommendedContainer {
   description?: string
 }
 
+export interface AdvisorFeedback {
+  rating: 'up' | 'down'
+  comment: string
+}
+
 export interface AdvisorResponse {
   containers: RecommendedContainer[]
   reasoning: string
   tradeoffs?: string[]
   warnings?: string[]
+  /** Session ID returned by the backend — used to associate feedback with the session. */
+  sessionId?: string
+  /** User feedback submitted after reviewing the recommendation. */
+  feedback?: AdvisorFeedback
 }

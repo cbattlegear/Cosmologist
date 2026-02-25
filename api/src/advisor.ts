@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { AzureOpenAI } from 'openai'
 import '@azure/openai/types'
 import crypto from 'crypto'
-import { saveAdvisorSession, type AdvisorSession } from './cosmosdb.js'
+import { saveAdvisorSession, updateAdvisorFeedback, type AdvisorSession } from './cosmosdb.js'
 
 const SYSTEM_PROMPT = `You are a CosmosDB NoSQL data modeling expert. Given a relational database schema and expected query/access patterns, recommend an optimal CosmosDB document model.
 
@@ -160,7 +160,7 @@ advisorRouter.post('/advisor', async (req, res) => {
           try {
             const parsed = JSON.parse(accumulated)
             console.log('[Advisor] → Result: ', parsed.containers?.length ?? 0, 'containers')
-            send('result', parsed)
+            send('result', { ...parsed, sessionId })
             saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: parsed, error: null, durationMs: Date.now() - startTime })
           } catch (parseErr: any) {
             console.error('[Advisor] JSON parse error:', parseErr.message)
@@ -234,3 +234,21 @@ function buildUserMessage(
 
   return parts.join('\n')
 }
+
+advisorRouter.post('/advisor/feedback', async (req, res) => {
+  console.log('[Advisor] ← POST /advisor/feedback received')
+  const { sessionId, rating, comment } = req.body
+
+  if (!sessionId || typeof rating !== 'string' || !['up', 'down'].includes(rating)) {
+    res.status(400).json({ error: 'Missing or invalid fields: sessionId, rating (up|down)' })
+    return
+  }
+
+  try {
+    await updateAdvisorFeedback(sessionId, { rating: rating as 'up' | 'down', comment: comment ?? '' })
+    res.json({ ok: true })
+  } catch (err: any) {
+    console.error('[Advisor] Failed to save feedback:', err.message)
+    res.status(500).json({ error: 'Failed to save feedback' })
+  }
+})
