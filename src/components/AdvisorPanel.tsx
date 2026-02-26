@@ -14,6 +14,9 @@ interface Props {
   onResult: (response: AdvisorResponse) => void
   onClose: () => void
   apiBaseUrl?: string
+  initialOperations?: QueryPattern[]
+  initialAdditionalContext?: string
+  onInputsChange?: (operations: QueryPattern[], additionalContext: string) => void
 }
 
 const DEFAULT_PATTERN: QueryPattern = {
@@ -42,15 +45,16 @@ function parseSSEBuffer(buffer: string): { events: Array<{ event: string; data: 
   return { events, remaining }
 }
 
-export default function AdvisorPanel({ schema, onResult, onClose, apiBaseUrl = '/api' }: Props) {
-  const [operations, setOperations] = useState<QueryPattern[]>([{ ...DEFAULT_PATTERN }])
-  const [additionalContext, setAdditionalContext] = useState('')
+export default function AdvisorPanel({ schema, onResult, onClose, apiBaseUrl = '/api', initialOperations, initialAdditionalContext, onInputsChange }: Props) {
+  const [operations, setOperations] = useState<QueryPattern[]>(initialOperations?.length ? initialOperations : [{ ...DEFAULT_PATTERN }])
+  const [additionalContext, setAdditionalContext] = useState(initialAdditionalContext ?? '')
   const [error, setError] = useState('')
 
   // Analyzing state
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisLog, setAnalysisLog] = useState<string[]>([])
   const [analysisError, setAnalysisError] = useState('')
+  const [pendingResult, setPendingResult] = useState<AdvisorResponse | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const updateOp = useCallback((idx: number, patch: Partial<QueryPattern>) => {
@@ -80,8 +84,11 @@ export default function AdvisorPanel({ schema, onResult, onClose, apiBaseUrl = '
     }
     setError('')
     setAnalyzing(true)
-    setAnalysisLog([])
+    setAnalysisLog(['Request sent'])
     setAnalysisError('')
+    setPendingResult(null)
+
+    onInputsChange?.(operations, additionalContext)
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -120,7 +127,8 @@ export default function AdvisorPanel({ schema, onResult, onClose, apiBaseUrl = '
           } else if (evt.event === 'result') {
             const data: AdvisorResponse = JSON.parse(evt.data)
             gotResult = true
-            onResult(data)
+            setPendingResult(data)
+            setAnalysisLog((prev) => [...prev, 'Analysis complete'])
           } else if (evt.event === 'error') {
             const { error: msg } = JSON.parse(evt.data)
             gotResult = true
@@ -184,10 +192,18 @@ export default function AdvisorPanel({ schema, onResult, onClose, apiBaseUrl = '
                 {analysisError}
               </div>
             )}
+            {pendingResult && (
+              <div className="advisor-transition">
+                <p>Opening your suggested data model, your current model is still available at <strong>File → Open Project</strong>.</p>
+                <button className="advisor-transition__open" onClick={() => onResult(pendingResult)}>Open Suggested Model</button>
+              </div>
+            )}
           </div>
           <div className="modal__footer">
             {analysisError ? (
               <button onClick={handleCancel}>Back</button>
+            ) : pendingResult ? (
+              null
             ) : (
               <button onClick={handleCancel}>Cancel</button>
             )}

@@ -42,7 +42,7 @@ import logoUrl from './assets/logo.svg'
 import { getEmbeddedModel } from './lib/models'
 import { useHistory } from './lib/useHistory'
 import { extractSchemaForAdvisor } from './lib/extractSchema'
-import type { AdvisorResponse } from './lib/advisorTypes'
+import type { AdvisorResponse, QueryPattern } from './lib/advisorTypes'
 import { materializeAdvisorData } from './lib/materializeAdvisor'
 import AdvisorPanel from './components/AdvisorPanel'
 
@@ -115,6 +115,7 @@ function App() {
   const [advisorFeedbackRating, setAdvisorFeedbackRating] = useState<'up' | 'down' | null>(null)
   const [advisorFeedbackComment, setAdvisorFeedbackComment] = useState('')
   const [advisorFeedbackSubmitting, setAdvisorFeedbackSubmitting] = useState(false)
+  const [advisorInputs, setAdvisorInputs] = useState<{ operations: QueryPattern[]; additionalContext: string } | null>(null)
 
   const [betaFeatures, setBetaFeatures] = useState(() => localStorage.getItem('cosmologist_beta') === '1')
   const [betaWarningOpen, setBetaWarningOpen] = useState(false)
@@ -271,6 +272,7 @@ function App() {
         const storedFeedback = (state as any).advisorNotes?.feedback
         setAdvisorFeedbackRating(storedFeedback?.rating ?? null)
         setAdvisorFeedbackComment(storedFeedback?.comment ?? '')
+        setAdvisorInputs((state as any).advisorInputs ?? null)
         setHydrated(true)
       })
     } else {
@@ -293,6 +295,7 @@ function App() {
       setAdvisorNotes(null)
       setAdvisorFeedbackRating(null)
       setAdvisorFeedbackComment('')
+      setAdvisorInputs(null)
       setHydrated(true)
     }
   }, [projectId])
@@ -337,11 +340,12 @@ function App() {
         edgePropertyNames,
         callouts,
         advisorNotes,
+        advisorInputs,
       } as any)
       setPersistError(ok ? '' : 'Project too large to save; persistence disabled for this project.')
     }, 500)
     return () => { if (persistTimerRef.current) clearTimeout(persistTimerRef.current) }
-  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts, advisorNotes])
+  }, [hydrated, projectId, tables, nodes, edges, rootTableId, leadRowIndex, selectedColumns, expandedTables, tableParsingOptions, edgeTypes, documentRootIds, columnSplits, tablePivots, edgeColumnFilters, edgeMaxDepth, edgePropertyNames, callouts, advisorNotes, advisorInputs])
 
   // Debounced history capture: push a snapshot whenever tracked state changes
   useEffect(() => {
@@ -567,6 +571,10 @@ function App() {
       alert('Failed to import project. Please check the file is valid.')
     }
     e.target.value = ''
+  }, [])
+
+  const handleAdvisorInputsChange = useCallback((operations: QueryPattern[], additionalContext: string) => {
+    setAdvisorInputs({ operations, additionalContext })
   }, [])
 
   const handleAdvisorResult = useCallback(async (response: AdvisorResponse) => {
@@ -1950,6 +1958,9 @@ function App() {
             onResult={handleAdvisorResult}
             onClose={() => setAdvisorOpen(false)}
             apiBaseUrl={import.meta.env.VITE_API_URL}
+            initialOperations={advisorInputs?.operations}
+            initialAdditionalContext={advisorInputs?.additionalContext}
+            onInputsChange={handleAdvisorInputsChange}
           />
         )}
 
