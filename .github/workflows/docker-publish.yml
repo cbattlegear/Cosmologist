@@ -40,8 +40,7 @@ jobs:
           IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY,,}-api"
           echo "IMAGE_NAME=${IMAGE_NAME}" >> "$GITHUB_ENV"
           SHORT_SHA="${GITHUB_SHA::7}"
-          BRANCH="${GITHUB_REF#refs/heads/}"
-          TAGS="${IMAGE_NAME}:${SHORT_SHA},${IMAGE_NAME}:latest,${IMAGE_NAME}:${BRANCH}"
+          TAGS="${IMAGE_NAME}:${SHORT_SHA},${IMAGE_NAME}:latest"
           echo "IMAGE_TAGS=${TAGS}" >> "$GITHUB_ENV"
           echo "DEPLOY_TAG=${SHORT_SHA}" >> "$GITHUB_ENV"
 
