@@ -18,3 +18,14 @@ services:
     env_file:
       - ./api/.env
     restart: unless-stopped
+
+  session-viewer:
+    build:
+      context: ./session-viewer
+    image: cosmologist-session-viewer:latest
+    ports:
+      - "3002:3002"
+    environment:
+      - COSMOS_DB_ENDPOINT=${COSMOS_DB_ENDPOINT}
+      - COSMOS_DB_KEY=${COSMOS_DB_KEY}
+    restart: unless-stopped
