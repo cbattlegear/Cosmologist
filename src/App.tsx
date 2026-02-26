@@ -112,6 +112,9 @@ function App() {
   const [edgeCalloutPopover, setEdgeCalloutPopover] = useState<{ edgeId: string; x: number; y: number } | null>(null)
   const [advisorOpen, setAdvisorOpen] = useState(false)
   const [advisorNotes, setAdvisorNotes] = useState<AdvisorResponse | null>(null)
+  const [advisorFeedbackRating, setAdvisorFeedbackRating] = useState<'up' | 'down' | null>(null)
+  const [advisorFeedbackComment, setAdvisorFeedbackComment] = useState('')
+  const [advisorFeedbackSubmitting, setAdvisorFeedbackSubmitting] = useState(false)
 
   const [betaFeatures, setBetaFeatures] = useState(() => localStorage.getItem('cosmologist_beta') === '1')
   const [betaWarningOpen, setBetaWarningOpen] = useState(false)
@@ -265,6 +268,9 @@ function App() {
         setSqlSchemaSource(state.sqlSchemaText ?? '')
         setCallouts((state as any).callouts ?? {})
         setAdvisorNotes(state.advisorNotes ?? null)
+        const storedFeedback = (state as any).advisorNotes?.feedback
+        setAdvisorFeedbackRating(storedFeedback?.rating ?? null)
+        setAdvisorFeedbackComment(storedFeedback?.comment ?? '')
         setHydrated(true)
       })
     } else {
@@ -285,6 +291,8 @@ function App() {
       setTablePivots([])
       setCallouts({})
       setAdvisorNotes(null)
+      setAdvisorFeedbackRating(null)
+      setAdvisorFeedbackComment('')
       setHydrated(true)
     }
   }, [projectId])
@@ -681,6 +689,8 @@ function App() {
     setTablePivots([])
     setCallouts({})
     setAdvisorNotes(response)
+    setAdvisorFeedbackRating(null)
+    setAdvisorFeedbackComment('')
     setSqlSchemaSource('')
     setTableParsingOptions({})
     setTableRenames({})
@@ -691,6 +701,24 @@ function App() {
     setProjectId(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectName, projects])
+
+  const handleAdvisorFeedbackSubmit = useCallback(async () => {
+    if (!advisorNotes?.sessionId || !advisorFeedbackRating) return
+    setAdvisorFeedbackSubmitting(true)
+    const feedback = { rating: advisorFeedbackRating, comment: advisorFeedbackComment }
+    try {
+      await fetch('/api/advisor/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: advisorNotes.sessionId, ...feedback }),
+      })
+    } catch {
+      // feedback submission is best-effort
+    }
+    const updated: AdvisorResponse = { ...advisorNotes, feedback }
+    setAdvisorNotes(updated)
+    setAdvisorFeedbackSubmitting(false)
+  }, [advisorNotes, advisorFeedbackRating, advisorFeedbackComment])
 
   const handleTableExpandToggle = useCallback((tableId: string) => {
     setExpandedTables((prev) => ({ ...prev, [tableId]: !prev[tableId] }))
@@ -1622,6 +1650,59 @@ function App() {
                 </ul>
               </>
             )}
+
+            {/* Feedback */}
+            {advisorNotes.feedback ? (
+              <div className="advisor-feedback advisor-feedback--submitted">
+                <span className="advisor-feedback__icon">{advisorNotes.feedback.rating === 'up' ? '👍' : '👎'}</span>
+                <span className="advisor-feedback__thanks">Thanks for your feedback!</span>
+                {advisorNotes.feedback.comment && (
+                  <p className="advisor-feedback__comment">"{advisorNotes.feedback.comment}"</p>
+                )}
+              </div>
+            ) : (
+              <div className="advisor-feedback">
+                <p className="advisor-feedback__prompt">Was this recommendation helpful?</p>
+                <div className="advisor-feedback__buttons">
+                  <button
+                    className={`advisor-feedback__thumb${advisorFeedbackRating === 'up' ? ' advisor-feedback__thumb--selected' : ''}`}
+                    onClick={() => { setAdvisorFeedbackRating('up'); setAdvisorFeedbackComment('') }}
+                    aria-label="Thumbs up"
+                    title="Yes, helpful"
+                  >👍</button>
+                  <button
+                    className={`advisor-feedback__thumb${advisorFeedbackRating === 'down' ? ' advisor-feedback__thumb--selected' : ''}`}
+                    onClick={() => { setAdvisorFeedbackRating('down'); setAdvisorFeedbackComment('') }}
+                    aria-label="Thumbs down"
+                    title="Needs improvement"
+                  >👎</button>
+                </div>
+                {advisorFeedbackRating && (
+                  <div className="advisor-feedback__detail">
+                    <label className="advisor-feedback__label">
+                      {advisorFeedbackRating === 'up'
+                        ? 'What did you like about the suggested data model?'
+                        : 'How could the data model be improved?'}
+                    </label>
+                    <textarea
+                      className="advisor-feedback__textarea"
+                      value={advisorFeedbackComment}
+                      onChange={(e) => setAdvisorFeedbackComment(e.target.value)}
+                      rows={3}
+                      placeholder="Your feedback (optional)..."
+                    />
+                    <button
+                      className="advisor-feedback__submit"
+                      onClick={handleAdvisorFeedbackSubmit}
+                      disabled={advisorFeedbackSubmitting}
+                    >
+                      {advisorFeedbackSubmitting ? 'Submitting…' : 'Submit Feedback'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button className="advisor-dismiss" onClick={() => setAdvisorNotes(null)}>Dismiss Notes</button>
           </section>
         )}
