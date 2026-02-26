@@ -68,13 +68,9 @@ export async function updateAdvisorFeedback(
   }
 
   try {
-    const { resource: doc } = await container.item(id, id).read<AdvisorSession>()
-    if (!doc) {
-      console.warn(`[CosmosDB] Session ${id} not found for feedback update`)
-      return
-    }
-    doc.feedback = { ...feedback, timestamp: new Date().toISOString() }
-    await container.item(id, id).replace(doc)
+    await container.item(id, id).patch([
+      { op: 'add', path: '/feedback', value: { ...feedback, timestamp: new Date().toISOString() } },
+    ])
     console.log(`[CosmosDB] Updated feedback for session ${id}`)
   } catch (err: any) {
     console.error(`[CosmosDB] Failed to update feedback for session ${id}:`, err.message)

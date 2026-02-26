@@ -707,7 +707,7 @@ function App() {
     setAdvisorFeedbackSubmitting(true)
     const feedback = { rating: advisorFeedbackRating, comment: advisorFeedbackComment }
     try {
-      await fetch('/api/advisor/feedback', {
+      await fetch(`${import.meta.env.VITE_API_URL || '/api'}/advisor/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: advisorNotes.sessionId, ...feedback }),
