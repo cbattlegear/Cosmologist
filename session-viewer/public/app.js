@@ -43,12 +43,16 @@ function renderList() {
     if (s.id === activeId) li.classList.add('active')
 
     const isError = !!s.error
+    const feedbackBadge = s.feedback
+      ? `<span class="badge badge-feedback">${s.feedback.rating === 'up' ? '👍' : '👎'}</span>`
+      : ''
     li.innerHTML = `
       <div class="session-id">${esc(s.sessionId ?? s.id)}</div>
       <div class="session-time">${formatTime(s.timestamp)}</div>
       <div class="session-meta">
         <span class="badge ${isError ? 'badge-error' : 'badge-success'}">${isError ? 'Error' : 'OK'}</span>
         <span class="badge badge-duration">${formatDuration(s.durationMs)}</span>
+        ${feedbackBadge}
       </div>
     `
     li.addEventListener('click', () => selectSession(s.id))
@@ -71,6 +75,7 @@ async function selectSession(id) {
   $('#detail-duration').textContent = ''
   $('#detail-status').textContent = ''
   $('#detail-error').classList.add('hidden')
+  $('#detail-feedback').innerHTML = ''
   $('#panel-schema').innerHTML = '<div class="loading">Loading…</div>'
   $('#panel-notes').innerHTML = ''
   $('#panel-model').innerHTML = ''
@@ -99,9 +104,37 @@ function renderDetail(s) {
     $('#detail-error').classList.add('hidden')
   }
 
+  renderFeedback(s.feedback)
   renderSchema(s.input)
   renderNotes(s.output)
   renderModel(s.output)
+}
+
+// ── Feedback banner ──
+function renderFeedback(feedback) {
+  const el = $('#detail-feedback')
+  if (!feedback) {
+    el.innerHTML = ''
+    return
+  }
+
+  const icon = feedback.rating === 'up' ? '👍' : '👎'
+  const label = feedback.rating === 'up' ? 'Positive' : 'Negative'
+  const ts = feedback.timestamp ? `<span class="feedback-time">${formatTime(feedback.timestamp)}</span>` : ''
+  const comment = feedback.comment
+    ? `<p class="feedback-comment">${esc(feedback.comment)}</p>`
+    : ''
+
+  el.innerHTML = `
+    <div class="feedback-banner feedback-banner--${feedback.rating}">
+      <div class="feedback-header">
+        <span class="feedback-icon">${icon}</span>
+        <span class="feedback-label">${label} Feedback</span>
+        ${ts}
+      </div>
+      ${comment}
+    </div>
+  `
 }
 
 // ── Schema panel ──

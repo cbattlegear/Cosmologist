@@ -27,7 +27,7 @@ app.get('/api/sessions', async (_req, res) => {
     const { resources } = await container.items
       .query({
         query:
-          'SELECT c.id, c.sessionId, c.timestamp, c.durationMs, c.error FROM c ORDER BY c.timestamp DESC',
+          'SELECT c.id, c.sessionId, c.timestamp, c.durationMs, c.error, c.feedback FROM c ORDER BY c.timestamp DESC',
       })
       .fetchAll()
     res.json(resources)

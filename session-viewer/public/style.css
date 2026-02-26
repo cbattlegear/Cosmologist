@@ -356,3 +356,58 @@ header h1 {
   text-align: center;
   color: var(--text-muted);
 }
+
+/* ── Feedback ── */
+
+.badge-feedback {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.feedback-banner {
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.feedback-banner--up {
+  background: #1a2a1a;
+  border: 1px solid var(--success);
+}
+
+.feedback-banner--down {
+  background: #3a1a1a;
+  border: 1px solid var(--error);
+}
+
+.feedback-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.feedback-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.feedback-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.feedback-comment {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-style: italic;
+  white-space: pre-wrap;
+}
