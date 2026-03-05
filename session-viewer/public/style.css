@@ -108,6 +108,7 @@ header h1 {
 .badge-success { background: #1a3a2a; color: var(--success); }
 .badge-error { background: #3a1a1a; color: var(--error); }
 .badge-duration { background: var(--bg-hover); color: var(--text-secondary); }
+.badge-deployment { background: #1a2a3a; color: #58a6ff; }
 
 /* ── Detail area ── */
 
