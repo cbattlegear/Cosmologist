@@ -244,6 +244,32 @@
   cursor: not-allowed;
 }
 
+.advisor-launch {
+  padding: 0.5rem 0;
+}
+
+.advisor-launch__button {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--accent, #58f);
+  border-radius: 6px;
+  background: var(--accent, #58f);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.advisor-launch__button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.advisor-launch__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .tables-section {
   border: 1px solid var(--border-primary);
   border-radius: 8px;

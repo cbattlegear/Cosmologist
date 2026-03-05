@@ -1594,6 +1594,22 @@ function App() {
           </ul>
         </section>
 
+        <section className="advisor-launch">
+          <button
+            className="advisor-launch__button"
+            onClick={() => {
+              if (!localStorage.getItem('cosmologist_advisor_consent')) {
+                setAdvisorConsentOpen(true)
+              } else {
+                setAdvisorOpen(true)
+              }
+            }}
+            disabled={!tables.length}
+          >
+            🧠 Data Model Advisor
+          </button>
+        </section>
+
         <section className="controls">
           <h2>Preview</h2>
           <select value={rootTableId} onChange={(e) => { setRootTableId(e.target.value); setDocumentRootIds((prev) => prev.length ? prev : [e.target.value]) }} disabled={!tables.length}>
