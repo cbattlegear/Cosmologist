@@ -321,6 +321,21 @@
   color: var(--danger-text);
 }
 
+.advisor-reference {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.advisor-reference a {
+  color: var(--accent, #58f);
+  text-decoration: none;
+}
+
+.advisor-reference a:hover {
+  text-decoration: underline;
+}
+
 .advisor-dismiss {
   margin-top: 0.75rem;
   font-size: 0.82rem;

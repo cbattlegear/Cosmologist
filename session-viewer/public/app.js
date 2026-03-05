@@ -52,6 +52,7 @@ function renderList() {
       <div class="session-meta">
         <span class="badge ${isError ? 'badge-error' : 'badge-success'}">${isError ? 'Error' : 'OK'}</span>
         <span class="badge badge-duration">${formatDuration(s.durationMs)}</span>
+        ${s.deployment ? `<span class="badge badge-deployment">${esc(s.deployment)}</span>` : ''}
         ${feedbackBadge}
       </div>
     `
@@ -95,6 +96,7 @@ function renderDetail(s) {
   $('#detail-time').textContent = formatTime(s.timestamp)
   $('#detail-duration').textContent = formatDuration(s.durationMs)
   $('#detail-status').textContent = s.error ? '❌ Error' : '✅ Success'
+  $('#detail-deployment').textContent = s.deployment ? `Model: ${s.deployment}` : ''
 
   if (s.error) {
     const errBanner = $('#detail-error')

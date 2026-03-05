@@ -170,8 +170,7 @@ export default function AdvisorPanel({ schema, onResult, onClose, apiBaseUrl = '
       <div className="modal">
         <div className="modal__content advisor-modal advisor-analyzing-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal__header">
-            <h3>CosmosDB Data Model Advisor</h3>
-          </div>
+            <h3>Cosmos DB Data Model Advisor</h3>          </div>
           <div className="advisor-analyzing">
             {!analysisError && (
               <div className="advisor-spinner" />
@@ -218,7 +217,7 @@ export default function AdvisorPanel({ schema, onResult, onClose, apiBaseUrl = '
     <div className="modal" onClick={onClose}>
       <div className="modal__content advisor-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal__header">
-          <h3>CosmosDB Data Model Advisor</h3>
+          <h3>Cosmos DB Data Model Advisor</h3>
           <button onClick={onClose}>Close</button>
         </div>
         <div className="modal__body advisor-body">

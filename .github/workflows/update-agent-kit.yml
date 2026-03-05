@@ -1,0 +1,51 @@
+name: Update CosmosDB Agent Kit Skills
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Every Monday at 9:00 UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch latest AGENTS.md
+        run: |
+          curl -fsSL -o api/skills/cosmosdb-best-practices/AGENTS.md \
+            "https://raw.githubusercontent.com/AzureCosmosDB/cosmosdb-agent-kit/main/skills/cosmosdb-best-practices/AGENTS.md"
+          curl -fsSL -o api/skills/cosmosdb-best-practices/metadata.json \
+            "https://raw.githubusercontent.com/AzureCosmosDB/cosmosdb-agent-kit/main/skills/cosmosdb-best-practices/metadata.json"
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet api/skills/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            VERSION=$(jq -r '.version' api/skills/cosmosdb-best-practices/metadata.json)
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/update-agent-kit-skills
+          delete-branch: true
+          commit-message: 'chore: update cosmosdb-agent-kit skills to v${{ steps.diff.outputs.version }}'
+          title: 'chore: update cosmosdb-agent-kit skills to v${{ steps.diff.outputs.version }}'
+          body: |
+            Automated update of the CosmosDB Agent Kit best-practices rules.
+
+            **Source:** [AzureCosmosDB/cosmosdb-agent-kit](https://github.com/AzureCosmosDB/cosmosdb-agent-kit)
+            **Version:** ${{ steps.diff.outputs.version }}
+
+            Please review the diff to verify the updated rules before merging.
+          labels: dependencies

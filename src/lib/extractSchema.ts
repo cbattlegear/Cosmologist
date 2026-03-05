@@ -4,7 +4,7 @@ import type { AdvisorSchemaInput, AdvisorTableInfo, AdvisorRelationship } from '
 
 /**
  * Extract a clean schema representation from the canvas state
- * for use with the CosmosDB data modeling advisor.
+ * for use with the Cosmos DB data modeling advisor.
  */
 export function extractSchemaForAdvisor(
   tables: TableData[],

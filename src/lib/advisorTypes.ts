@@ -1,4 +1,4 @@
-/** Advisor request/response types for CosmosDB data modeling recommendations. */
+/** Advisor request/response types for Cosmos DB data modeling recommendations. */
 
 // ─── Request types ───
 
@@ -55,9 +55,28 @@ export interface RecommendedProperty {
   source?: string // e.g. "Orders.OrderDate" — original table.column
 }
 
+export interface IndexingPolicy {
+  compositeIndexes?: string[][]
+  excludedPaths?: string[]
+  spatialIndexes?: string[]
+}
+
+export interface ChangeFeedPattern {
+  sourceContainer: string
+  targetContainer: string
+  purpose: string
+}
+
+export interface GlobalSettings {
+  consistencyLevel?: string
+  multiRegion?: boolean
+  schemaVersioning?: boolean
+}
+
 export interface RecommendedContainer {
   name: string
   partitionKey: string
+  hierarchicalPartitionKeys?: string[]
   properties: RecommendedProperty[]
   embeddedEntities?: {
     name: string
@@ -65,6 +84,9 @@ export interface RecommendedContainer {
     relationship: 'one-to-many' | 'one-to-one'
     properties: RecommendedProperty[]
   }[]
+  indexingPolicy?: IndexingPolicy
+  ttl?: number | null
+  estimatedDocumentSizeKB?: number
   description?: string
 }
 
@@ -75,6 +97,8 @@ export interface AdvisorFeedback {
 
 export interface AdvisorResponse {
   containers: RecommendedContainer[]
+  changeFeedPatterns?: ChangeFeedPattern[]
+  globalSettings?: GlobalSettings
   reasoning: string
   tradeoffs?: string[]
   warnings?: string[]

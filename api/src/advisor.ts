@@ -3,54 +3,21 @@ import { AzureOpenAI } from 'openai'
 import '@azure/openai/types'
 import crypto from 'crypto'
 import { saveAdvisorSession, updateAdvisorFeedback, type AdvisorSession } from './cosmosdb.js'
+import { buildSystemPrompt, estimateTokens } from './skills.js'
 
-const SYSTEM_PROMPT = `You are a CosmosDB NoSQL data modeling expert. Given a relational database schema and expected query/access patterns, recommend an optimal CosmosDB document model.
-
-Core principles to apply:
-- **Embed vs Reference**: Embed data that is read together. Reference data that is updated independently or has unbounded growth.
-- **Partition Key Selection**: Choose a partition key that evenly distributes data and aligns with the most frequent query filters. Avoid hot partitions.
-- **Denormalization**: Duplicate data across containers when read patterns demand it. Favor read performance over write simplicity.
-- **Access Pattern Alignment**: Each container should be optimized for its primary access patterns. A single relational table may split into multiple containers or merge into one.
-- **RU Optimization**: Point reads (by id + partition key) cost ~1 RU. Cross-partition queries are expensive. Design to maximize point reads for hot paths.
-- **Document Size**: Keep documents under 100KB where possible. Avoid unbounded arrays.
-- **Change Feed**: Consider change feed for materializing views or syncing denormalized data.
-- **TTL**: Suggest TTL for time-scoped data (logs, sessions, events).
-
-Respond ONLY with valid JSON matching this schema:
-{
-  "containers": [
-    {
-      "name": "string — container name",
-      "partitionKey": "string — partition key path (e.g. /userId)",
-      "properties": [
-        { "name": "string", "dataType": "string (optional)", "source": "string — OriginalTable.column (optional)" }
-      ],
-      "embeddedEntities": [
-        {
-          "name": "string — embedded array/object name",
-          "sourceTable": "string — original table this data comes from",
-          "relationship": "one-to-many | one-to-one",
-          "properties": [
-            { "name": "string", "dataType": "string (optional)", "source": "string (optional)" }
-          ]
-        }
-      ],
-      "description": "string — brief description of this container's purpose"
-    }
-  ],
-  "reasoning": "string — detailed explanation of the design decisions",
-  "tradeoffs": ["string — trade-off 1", "string — trade-off 2"],
-  "warnings": ["string — potential issue or consideration"]
-}
-
-Be thorough in your reasoning. Explain WHY each decision was made and how it aligns with the provided access patterns.`
+const includeCodeExamples = process.env.SKILL_INCLUDE_CODE_EXAMPLES === 'true'
+const systemPrompt = buildSystemPrompt({ includeCodeExamples })
+console.log(`[Skills] System prompt loaded (≈${estimateTokens({ includeCodeExamples })} tokens, code examples: ${includeCodeExamples})`)
 
 export const advisorRouter = Router()
 
 function detectPhase(text: string): string {
   if (text.includes('"warnings"')) return 'Checking for warnings…'
   if (text.includes('"tradeoffs"')) return 'Evaluating trade-offs…'
+  if (text.includes('"globalSettings"')) return 'Recommending global settings…'
+  if (text.includes('"changeFeedPatterns"')) return 'Planning change feed patterns…'
   if (text.includes('"reasoning"')) return 'Generating reasoning…'
+  if (text.includes('"indexingPolicy"')) return 'Configuring indexes…'
   if (text.includes('"embeddedEntities"')) return 'Modeling embedded entities…'
   if (text.includes('"containers"')) return 'Designing containers…'
   return 'Analyzing schema…'
@@ -121,10 +88,10 @@ advisorRouter.post('/advisor', async (req, res) => {
       const stream = await client.chat.completions.create({
         model: deployment,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
         ],
-        max_completion_tokens: 4096,
+        max_completion_tokens: 16384,
         response_format: { type: 'json_object' },
         stream: true,
       })
@@ -155,25 +122,25 @@ advisorRouter.post('/advisor', async (req, res) => {
         if (!accumulated) {
           console.log('[Advisor] → No content from LLM')
           send('error', { error: 'No response from Azure OpenAI' })
-          saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: null, error: 'No response from Azure OpenAI', durationMs: Date.now() - startTime })
+          saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: null, error: 'No response from Azure OpenAI', durationMs: Date.now() - startTime })
         } else {
           try {
             const parsed = JSON.parse(accumulated)
             console.log('[Advisor] → Result: ', parsed.containers?.length ?? 0, 'containers')
             send('result', { ...parsed, sessionId })
-            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: parsed, error: null, durationMs: Date.now() - startTime })
+            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: parsed, error: null, durationMs: Date.now() - startTime })
           } catch (parseErr: any) {
             console.error('[Advisor] JSON parse error:', parseErr.message)
             console.error('[Advisor] Raw content (first 500 chars):', accumulated.slice(0, 500))
             send('error', { error: 'Failed to parse model response' })
-            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: null, error: `JSON parse error: ${parseErr.message}`, durationMs: Date.now() - startTime })
+            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: null, error: `JSON parse error: ${parseErr.message}`, durationMs: Date.now() - startTime })
           }
         }
       }
     } catch (streamErr: any) {
       console.error('[Advisor] Stream error:', streamErr.message ?? streamErr)
       send('error', { error: streamErr.message ?? 'Failed to get model response' })
-      saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: null, error: streamErr.message ?? 'Stream error', durationMs: Date.now() - startTime })
+      saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: null, error: streamErr.message ?? 'Stream error', durationMs: Date.now() - startTime })
     } finally {
       clearInterval(keepalive)
     }

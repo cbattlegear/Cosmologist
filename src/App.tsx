@@ -117,8 +117,7 @@ function App() {
   const [advisorFeedbackSubmitting, setAdvisorFeedbackSubmitting] = useState(false)
   const [advisorInputs, setAdvisorInputs] = useState<{ operations: QueryPattern[]; additionalContext: string } | null>(null)
 
-  const [betaFeatures, setBetaFeatures] = useState(() => localStorage.getItem('cosmologist_beta') === '1')
-  const [betaWarningOpen, setBetaWarningOpen] = useState(false)
+  const [advisorConsentOpen, setAdvisorConsentOpen] = useState(false)
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const stored = localStorage.getItem('cosmologist_theme') as 'light' | 'dark' | null
@@ -1450,7 +1449,14 @@ function App() {
             <button className="menu-button" onClick={() => toggleMenu('tools')}>Tools ▾</button>
             {menuOpen === 'tools' && (
               <div className="menu-dropdown" role="menu">
-                <button onClick={() => { setAdvisorOpen(true); closeMenus() }} disabled={!tables.length || !betaFeatures} title={!betaFeatures ? 'Enable Beta Features to use the Data Model Advisor' : undefined}>Data Model Advisor{!betaFeatures ? ' 🔒' : ' ᵝ'}</button>
+                <button onClick={() => {
+                  if (!localStorage.getItem('cosmologist_advisor_consent')) {
+                    setAdvisorConsentOpen(true)
+                  } else {
+                    setAdvisorOpen(true)
+                  }
+                  closeMenus()
+                }} disabled={!tables.length}>Data Model Advisor</button>
               </div>
             )}
           </div>
@@ -1461,22 +1467,6 @@ function App() {
         </div>
         <div className="project-title" title={currentProjectName}>{currentProjectName}</div>
         <div className="app-brand">
-          <label className="beta-toggle" title={betaFeatures ? 'Disable beta features' : 'Enable beta features'}>
-            <input
-              type="checkbox"
-              checked={betaFeatures}
-              onChange={() => {
-                if (!betaFeatures) {
-                  setBetaWarningOpen(true)
-                } else {
-                  setBetaFeatures(false)
-                  localStorage.removeItem('cosmologist_beta')
-                }
-              }}
-            />
-            <span className="beta-toggle__slider" />
-            <span className="beta-toggle__label">Beta</span>
-          </label>
           <button
             onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '0 0.25rem', lineHeight: 1 }}
@@ -1604,6 +1594,22 @@ function App() {
           </ul>
         </section>
 
+        <section className="advisor-launch">
+          <button
+            className="advisor-launch__button"
+            onClick={() => {
+              if (!localStorage.getItem('cosmologist_advisor_consent')) {
+                setAdvisorConsentOpen(true)
+              } else {
+                setAdvisorOpen(true)
+              }
+            }}
+            disabled={!tables.length}
+          >
+            🧠 Data Model Advisor
+          </button>
+        </section>
+
         <section className="controls">
           <h2>Preview</h2>
           <select value={rootTableId} onChange={(e) => { setRootTableId(e.target.value); setDocumentRootIds((prev) => prev.length ? prev : [e.target.value]) }} disabled={!tables.length}>
@@ -1658,6 +1664,10 @@ function App() {
                 </ul>
               </>
             )}
+
+            <p className="advisor-reference">
+              Best practices powered by the <a href="https://learn.microsoft.com/en-us/azure/cosmos-db/gen-ai/agent-kit" target="_blank" rel="noopener noreferrer">Cosmos DB Agent Kit</a>.
+            </p>
 
             {/* Feedback */}
             {advisorNotes.feedback ? (
@@ -1964,20 +1974,26 @@ function App() {
           />
         )}
 
-        {betaWarningOpen && (
-          <div className="modal" onClick={() => setBetaWarningOpen(false)}>
+        {advisorConsentOpen && (
+          <div className="modal" onClick={() => setAdvisorConsentOpen(false)}>
             <div className="modal__content" onClick={(e) => e.stopPropagation()}>
               <div className="modal__header">
-                <h3>Enable Beta Features</h3>
-                <button onClick={() => setBetaWarningOpen(false)}>Close</button>
+                <h3>Data Model Advisor</h3>
+                <button onClick={() => setAdvisorConsentOpen(false)}>Close</button>
               </div>
               <div className="modal__body">
-                <p><strong>⚠️ The Data Model Advisor is currently in beta and may provide incorrect information.</strong></p>
-                <p>When using the Data Model Advisor, your data model will be sent to Azure for processing. During the beta period, submitted data models may be reviewed by a person for quality and safety purposes.</p>
-                <p>By enabling beta features you acknowledge and accept these conditions.</p>
+                <p><strong>⚠️ AI-Powered Data Modeling</strong></p>
+                <p>The Data Model Advisor uses an AI system (Azure OpenAI) to analyze your schema and recommend an optimized Cosmos DB document model.</p>
+                <p>When you use this feature:</p>
+                <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem' }}>
+                  <li>Your table schema, relationships, and query patterns will be sent to Azure for processing.</li>
+                  <li>Submitted data models may be stored and reviewed for quality and safety purposes.</li>
+                  <li>AI-generated recommendations may contain inaccuracies — always review before applying.</li>
+                </ul>
+                <p>By continuing you acknowledge and accept these conditions.</p>
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                  <button onClick={() => setBetaWarningOpen(false)}>Cancel</button>
-                  <button onClick={() => { setBetaFeatures(true); localStorage.setItem('cosmologist_beta', '1'); setBetaWarningOpen(false) }}>Enable Beta Features</button>
+                  <button onClick={() => setAdvisorConsentOpen(false)}>Cancel</button>
+                  <button onClick={() => { localStorage.setItem('cosmologist_advisor_consent', '1'); setAdvisorConsentOpen(false); setAdvisorOpen(true) }}>Continue</button>
                 </div>
               </div>
             </div>
