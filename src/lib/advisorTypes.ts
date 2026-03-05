@@ -1,4 +1,4 @@
-/** Advisor request/response types for CosmosDB data modeling recommendations. */
+/** Advisor request/response types for Cosmos DB data modeling recommendations. */
 
 // ─── Request types ───
 

@@ -32,7 +32,7 @@ function condense(md: string): string {
   return md.replace(/```[\s\S]*?```/g, '_(code example omitted for brevity)_')
 }
 
-const INSTRUCTION_PREAMBLE = `You are a CosmosDB NoSQL data modeling expert. Given a relational database schema and expected query/access patterns, recommend an optimal CosmosDB NoSQL document model.
+const INSTRUCTION_PREAMBLE = `You are a Cosmos DB NoSQL data modeling expert. Given a relational database schema and expected query/access patterns, recommend an optimal Cosmos DB NoSQL document model.
 
 Apply the best practices from the reference guide below. Use the rules to inform your decisions about:
 - Embedding vs referencing data (access correlation, bounded vs unbounded growth, update frequency)

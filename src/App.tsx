@@ -1979,7 +1979,7 @@ function App() {
               </div>
               <div className="modal__body">
                 <p><strong>⚠️ AI-Powered Data Modeling</strong></p>
-                <p>The Data Model Advisor uses an AI system (Azure OpenAI) to analyze your schema and recommend an optimized CosmosDB document model.</p>
+                <p>The Data Model Advisor uses an AI system (Azure OpenAI) to analyze your schema and recommend an optimized Cosmos DB document model.</p>
                 <p>When you use this feature:</p>
                 <ul style={{ margin: '0.5rem 0', paddingLeft: '1.5rem' }}>
                   <li>Your table schema, relationships, and query patterns will be sent to Azure for processing.</li>
