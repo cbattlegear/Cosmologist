@@ -25,6 +25,7 @@ export interface AdvisorSession {
   id: string
   sessionId: string
   timestamp: string
+  deployment: string
   input: {
     schema: unknown
     operations: unknown[]

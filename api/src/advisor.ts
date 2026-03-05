@@ -122,25 +122,25 @@ advisorRouter.post('/advisor', async (req, res) => {
         if (!accumulated) {
           console.log('[Advisor] → No content from LLM')
           send('error', { error: 'No response from Azure OpenAI' })
-          saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: null, error: 'No response from Azure OpenAI', durationMs: Date.now() - startTime })
+          saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: null, error: 'No response from Azure OpenAI', durationMs: Date.now() - startTime })
         } else {
           try {
             const parsed = JSON.parse(accumulated)
             console.log('[Advisor] → Result: ', parsed.containers?.length ?? 0, 'containers')
             send('result', { ...parsed, sessionId })
-            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: parsed, error: null, durationMs: Date.now() - startTime })
+            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: parsed, error: null, durationMs: Date.now() - startTime })
           } catch (parseErr: any) {
             console.error('[Advisor] JSON parse error:', parseErr.message)
             console.error('[Advisor] Raw content (first 500 chars):', accumulated.slice(0, 500))
             send('error', { error: 'Failed to parse model response' })
-            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: null, error: `JSON parse error: ${parseErr.message}`, durationMs: Date.now() - startTime })
+            saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: null, error: `JSON parse error: ${parseErr.message}`, durationMs: Date.now() - startTime })
           }
         }
       }
     } catch (streamErr: any) {
       console.error('[Advisor] Stream error:', streamErr.message ?? streamErr)
       send('error', { error: streamErr.message ?? 'Failed to get model response' })
-      saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), input: { schema, operations, additionalContext }, output: null, error: streamErr.message ?? 'Stream error', durationMs: Date.now() - startTime })
+      saveAdvisorSession({ id: sessionId, sessionId, timestamp: new Date().toISOString(), deployment, input: { schema, operations, additionalContext }, output: null, error: streamErr.message ?? 'Stream error', durationMs: Date.now() - startTime })
     } finally {
       clearInterval(keepalive)
     }
