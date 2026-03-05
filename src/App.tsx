@@ -1665,6 +1665,10 @@ function App() {
               </>
             )}
 
+            <p className="advisor-reference">
+              Best practices powered by the <a href="https://learn.microsoft.com/en-us/azure/cosmos-db/gen-ai/agent-kit" target="_blank" rel="noopener noreferrer">Cosmos DB Agent Kit</a>.
+            </p>
+
             {/* Feedback */}
             {advisorNotes.feedback ? (
               <div className="advisor-feedback advisor-feedback--submitted">
