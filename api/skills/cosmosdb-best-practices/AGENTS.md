@@ -44,7 +44,8 @@ Performance optimization and best practices guide for Azure Cosmos DB applicatio
    - 3.3 [Order Filters by Selectivity](#33-order-filters-by-selectivity)
    - 3.4 [Use Continuation Tokens for Pagination](#34-use-continuation-tokens-for-pagination)
    - 3.5 [Use Parameterized Queries](#35-use-parameterized-queries)
-   - 3.6 [Project Only Needed Fields](#36-project-only-needed-fields)
+   - 3.6 [Use Literal Integers for TOP, Never Parameters](#36-use-literal-integers-for-top-never-parameters)
+   - 3.7 [Project Only Needed Fields](#37-project-only-needed-fields)
 4. [SDK Best Practices](#4-sdk-best-practices) — **HIGH**
    - 4.1 [Use Async APIs for Better Throughput](#41-use-async-apis-for-better-throughput)
    - 4.2 [Configure Threshold-Based Availability Strategy (Hedging)](#42-configure-threshold-based-availability-strategy-hedging-)
@@ -54,23 +55,25 @@ Performance optimization and best practices guide for Azure Cosmos DB applicatio
    - 4.6 [Configure SSL and connection mode for Cosmos DB Emulator](#46-configure-ssl-and-connection-mode-for-cosmos-db-emulator)
    - 4.7 [Use ETags for optimistic concurrency on read-modify-write operations](#47-use-etags-for-optimistic-concurrency-on-read-modify-write-operations)
    - 4.8 [Configure Excluded Regions for Dynamic Failover](#48-configure-excluded-regions-for-dynamic-failover)
-   - 4.9 [Enable content response on write operations in Java SDK](#49-enable-content-response-on-write-operations-in-java-sdk)
+   - 4.9 [Unwrap CosmosItemResponse and enable content response in Java SDK](#49-unwrap-cosmositemresponse-and-enable-content-response-in-java-sdk)
    - 4.10 [Use dependent @Bean methods for Cosmos DB initialization in Spring Boot](#410-use-dependent-bean-methods-for-cosmos-db-initialization-in-spring-boot)
    - 4.11 [Spring Boot and Java version compatibility for Cosmos DB SDK](#411-spring-boot-and-java-version-compatibility-for-cosmos-db-sdk)
    - 4.12 [Configure local development environment to avoid cloud connection conflicts](#412-configure-local-development-environment-to-avoid-cloud-connection-conflicts)
    - 4.13 [Explicitly reference Newtonsoft.Json package](#413-explicitly-reference-newtonsoft-json-package)
    - 4.14 [Configure Preferred Regions for Availability](#414-configure-preferred-regions-for-availability)
-   - 4.15 [Handle 429 Errors with Retry-After](#415-handle-429-errors-with-retry-after)
-   - 4.16 [Use consistent enum serialization between Cosmos SDK and application layer](#416-use-consistent-enum-serialization-between-cosmos-sdk-and-application-layer)
-   - 4.17 [Reuse CosmosClient as Singleton](#417-reuse-cosmosclient-as-singleton)
-   - 4.18 [Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs](#418-annotate-entities-for-spring-data-cosmos-with-container-partitionkey-and-string-ids)
-   - 4.19 [Use CosmosRepository correctly and handle Iterable return types](#419-use-cosmosrepository-correctly-and-handle-iterable-return-types)
+   - 4.15 [Include aiohttp When Using Python Async SDK](#415-include-aiohttp-when-using-python-async-sdk)
+   - 4.16 [Handle 429 Errors with Retry-After](#416-handle-429-errors-with-retry-after)
+   - 4.17 [Use consistent enum serialization between Cosmos SDK and application layer](#417-use-consistent-enum-serialization-between-cosmos-sdk-and-application-layer)
+   - 4.18 [Reuse CosmosClient as Singleton](#418-reuse-cosmosclient-as-singleton)
+   - 4.19 [Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs](#419-annotate-entities-for-spring-data-cosmos-with-container-partitionkey-and-string-ids)
+   - 4.20 [Use CosmosRepository correctly and handle Iterable return types](#420-use-cosmosrepository-correctly-and-handle-iterable-return-types)
 5. [Indexing Strategies](#5-indexing-strategies) — **MEDIUM-HIGH**
-   - 5.1 [Use Composite Indexes for ORDER BY](#51-use-composite-indexes-for-order-by)
-   - 5.2 [Exclude Unused Index Paths](#52-exclude-unused-index-paths)
-   - 5.3 [Understand Indexing Modes](#53-understand-indexing-modes)
-   - 5.4 [Choose Appropriate Index Types](#54-choose-appropriate-index-types)
-   - 5.5 [Add Spatial Indexes for Geo Queries](#55-add-spatial-indexes-for-geo-queries)
+   - 5.1 [Composite Index Directions Must Match ORDER BY](#51-composite-index-directions-must-match-order-by)
+   - 5.2 [Use Composite Indexes for ORDER BY](#52-use-composite-indexes-for-order-by)
+   - 5.3 [Exclude Unused Index Paths](#53-exclude-unused-index-paths)
+   - 5.4 [Understand Indexing Modes](#54-understand-indexing-modes)
+   - 5.5 [Choose Appropriate Index Types](#55-choose-appropriate-index-types)
+   - 5.6 [Add Spatial Indexes for Geo Queries](#56-add-spatial-indexes-for-geo-queries)
 6. [Throughput & Scaling](#6-throughput-scaling) — **MEDIUM**
    - 6.1 [Use Autoscale for Variable Workloads](#61-use-autoscale-for-variable-workloads)
    - 6.2 [Understand Burst Capacity](#62-understand-burst-capacity)
@@ -454,6 +457,7 @@ public class User {
 **Correct (proper serialization for Cosmos DB):**
 
 ```java
+@JsonIgnoreProperties(ignoreUnknown = true)  // ✅ Ignore Cosmos DB system metadata (_rid, _self, _etag, _ts, _lsn)
 @Container(containerName = "users")
 public class User {
 
@@ -556,6 +560,59 @@ private Set<String> authorities;
 ```
 
 Convert between simple and complex types in the service layer, not in the entity.
+
+**Rule 5: Ignore unknown properties from Cosmos DB system metadata**
+
+Cosmos DB documents contain system metadata fields (`_rid`, `_self`, `_etag`, `_ts`, `_lsn`) that are not part of your entity model. Without handling these, Jackson throws `UnrecognizedPropertyException` when deserializing documents — during point reads, queries, and Change Feed processing:
+
+```
+com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException:
+  Unrecognized field "_lsn" (class PlayerProfile), not marked as ignorable
+```
+
+**Option A (recommended): Configure globally at the ObjectMapper or Spring Boot level**
+
+This handles unknown properties for all entity classes without requiring per-class annotations:
+
+```java
+// ✅ Global ObjectMapper configuration — covers all Cosmos DB entities
+ObjectMapper mapper = new ObjectMapper();
+mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+```
+
+For Spring Boot applications, add to `application.properties`:
+
+```properties
+# ✅ Spring Boot global setting
+spring.jackson.deserialization.fail-on-unknown-properties=false
+```
+
+**Option B: Annotate each entity class with `@JsonIgnoreProperties(ignoreUnknown = true)`**
+
+If global configuration is not possible, annotate every Cosmos DB entity class:
+
+```java
+// ❌ Fails on system metadata fields from Cosmos DB
+@Container(containerName = "players")
+public class PlayerProfile {
+    @Id
+    private String id;
+    private String playerId;
+    private int score;
+}
+
+// ✅ Ignores unknown fields — safe for all Cosmos DB reads
+@JsonIgnoreProperties(ignoreUnknown = true)
+@Container(containerName = "players")
+public class PlayerProfile {
+    @Id
+    private String id;
+    private String playerId;
+    private int score;
+}
+```
+
+⚠️ **This annotation must be on every entity class.** If you miss even one, deserialization of that entity will fail when Cosmos DB system metadata is present.
 
 Reference: [Jackson annotations guide](https://github.com/FasterXML/jackson-annotations/wiki/Jackson-Annotations)
 
@@ -1812,10 +1869,45 @@ var results = container.GetItemLinqQueryable<Order>(
     .ToFeedIterator();
 ```
 
+### Spring Data Cosmos — `@Query` methods bypass partition key routing
+
+Spring Data Cosmos **does not** auto-route partition keys for `@Query`-annotated repository methods. Derived query methods (e.g., `findByTypeAndLeaderboardKey()`) are automatically scoped to the partition key, but `@Query` methods are **not** — they silently perform cross-partition scans even when the repository entity has a partition key annotation. The bug is invisible: queries return HTTP 200 with silently incorrect data (results from all partitions mixed together) and inflated RU charges.
+
+For every `@Query` method, you must either:
+1. **Add the partition key to the WHERE clause** explicitly, or
+2. **Use a derived query method** instead of `@Query`
+
+**Incorrect — `@Query` without partition key filter (silent cross-partition scan):**
+
+```java
+// ❌ Missing partition key filter — performs cross-partition scan
+// Returns entries from ALL partitions mixed together (wrong data, high RU)
+@Query("SELECT * FROM c WHERE c.type = @type")
+List<LeaderboardEntry> findByType(@Param("type") String type);
+```
+
+**Correct — explicit partition key in `@Query` WHERE clause:**
+
+```java
+// ✅ Partition key included in WHERE clause — single-partition query
+@Query("SELECT * FROM c WHERE c.type = @type AND c.leaderboardKey = @leaderboardKey")
+List<LeaderboardEntry> findByTypeAndLeaderboardKey(
+    @Param("type") String type,
+    @Param("leaderboardKey") String leaderboardKey);
+```
+
+**Correct — derived query method (auto-routes partition key):**
+
+```java
+// ✅ Derived query method — Spring Data auto-routes to the correct partition
+List<LeaderboardEntry> findByTypeAndLeaderboardKey(String type, String leaderboardKey);
+```
+
 Strategies to avoid cross-partition:
 1. Include partition key in WHERE clause
 2. Denormalize data to colocate in same partition
 3. Create secondary containers with different partition keys for different access patterns
+4. In Spring Data Cosmos, prefer derived query methods over `@Query` for automatic partition key routing
 
 Reference: [Query patterns](https://learn.microsoft.com/azure/cosmos-db/nosql/query/getting-started)
 
@@ -2236,7 +2328,57 @@ Benefits:
 
 Reference: [Parameterized queries](https://learn.microsoft.com/azure/cosmos-db/nosql/query/parameterized-queries)
 
-### 3.6 Project Only Needed Fields
+### 3.6 Use Literal Integers for TOP, Never Parameters
+
+**Impact: HIGH** (prevents query failures at runtime)
+
+## Use Literal Integers for TOP, Never Parameters
+
+The `TOP` keyword in Cosmos DB SQL requires a literal integer — it does **not** support parameterized values. Using `@param` in `SELECT TOP @param` will fail at runtime with a query syntax error.
+
+**Incorrect (parameterized TOP — fails at runtime):**
+
+```python
+# This causes a 400 Bad Request or runtime error
+query = "SELECT TOP @top * FROM c ORDER BY c.score DESC"
+params = [{"name": "@top", "value": 10}]
+items = container.query_items(query, parameters=params, enable_cross_partition_query=True)
+```
+
+```csharp
+// This will also fail
+var query = new QueryDefinition("SELECT TOP @top * FROM c ORDER BY c.score DESC")
+    .WithParameter("@top", 10);
+```
+
+**Correct (literal integer in TOP clause):**
+
+```python
+# Use a literal integer for TOP — validate and cast to int to prevent injection
+top = int(top)  # Ensures it's a safe integer
+query = f"SELECT TOP {top} * FROM c ORDER BY c.score DESC"
+items = container.query_items(query, enable_cross_partition_query=True)
+```
+
+```csharp
+// Interpolate a validated integer for TOP
+int topN = 10;
+var query = new QueryDefinition($"SELECT TOP {topN} * FROM c ORDER BY c.score DESC");
+```
+
+```python
+# Keep other values parameterized — only TOP must be literal
+top = int(top)
+query = f"SELECT TOP {top} * FROM c WHERE c.gameId = @gameId ORDER BY c.score DESC"
+params = [{"name": "@gameId", "value": game_id}]
+items = container.query_items(query, parameters=params, enable_cross_partition_query=True)
+```
+
+Always cast the TOP value to `int` before interpolation to ensure it is a safe integer and prevent injection.
+
+Reference: [SQL query TOP keyword](https://learn.microsoft.com/azure/cosmos-db/nosql/query/select#top-keyword)
+
+### 3.7 Project Only Needed Fields
 
 **Impact: HIGH** (reduces RU and network by 30-80%)
 
@@ -3536,11 +3678,64 @@ var outageOptions = new ItemRequestOptions
 Reference: [Performance tips - .NET SDK Excluded Regions](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-dotnet-sdk-v3#excluded-regions)
 Reference: [Performance tips - Java SDK Excluded Regions](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-java-sdk-v4#excluded-regions)
 
-### 4.9 Enable content response on write operations in Java SDK
+### 4.9 Unwrap CosmosItemResponse and enable content response in Java SDK
 
-**Impact: MEDIUM** (ensures created/updated documents are returned from write operations)
+**Impact: MEDIUM** (prevents type errors from missing getItem() on reads and null content on writes)
 
-## Enable Content Response on Write Operations (Java)
+## Unwrap CosmosItemResponse with getItem() (Java)
+
+All Cosmos DB Java SDK point-read and write operations (`readItem`, `createItem`, `upsertItem`, `replaceItem`) return `CosmosItemResponse<T>`, **not** `T` directly. You must call `.getItem()` to extract the entity. Treating the response wrapper as the entity causes compilation errors or incorrect behavior.
+
+### Always unwrap readItem() with getItem()
+
+`readItem()` always returns `CosmosItemResponse<T>`. You must call `.getItem()` to get the actual document.
+
+**Incorrect — treating CosmosItemResponse as the entity:**
+
+```java
+// ❌ WRONG: readItem returns CosmosItemResponse<Player>, NOT Player
+public Player getPlayer(String playerId) {
+    Player player = container.readItem(
+        playerId, new PartitionKey(playerId), Player.class);  // ❌ Compilation error!
+    return player;
+}
+```
+
+```java
+// ❌ WRONG (async): Mono<CosmosItemResponse<Player>> is not Mono<Player>
+public Mono<Player> getPlayer(String playerId) {
+    return container.readItem(
+        playerId, new PartitionKey(playerId), Player.class);  // ❌ Type mismatch!
+}
+```
+
+**Correct — unwrap with getItem():**
+
+```java
+// ✅ CORRECT: Call getItem() to extract the entity from the response
+public Player getPlayer(String playerId) {
+    CosmosItemResponse<Player> response = container.readItem(
+        playerId, new PartitionKey(playerId), Player.class);
+    return response.getItem();  // ✅ Returns the Player entity
+}
+```
+
+```java
+// ✅ CORRECT (async): Map the response to extract the entity
+public Mono<Player> getPlayer(String playerId) {
+    return container.readItem(
+            playerId, new PartitionKey(playerId), Player.class)
+        .map(response -> response.getItem());  // ✅ Unwrap to Player
+}
+```
+
+> **Why this matters:** `CosmosItemResponse<T>` is a wrapper that holds the entity (`getItem()`),
+> request charge (`getRequestCharge()`), ETag (`getETag()`), headers, and diagnostics.
+> Assigning the response directly to a variable of type `T` is a compile-time error in
+> synchronous code and a type-mismatch error in reactive chains. This affects `readItem`,
+> `createItem`, `upsertItem`, and `replaceItem` — all return `CosmosItemResponse<T>`.
+
+### Enable Content Response on Write Operations
 
 By default, the Java Cosmos DB SDK does **not** return the document content after create/upsert operations. The response contains only metadata (headers, diagnostics) but the `getItem()` method returns null. You must explicitly enable content response if you need the created document.
 
@@ -3620,12 +3815,51 @@ public interface OrderRepository extends CosmosRepository<Order, String> {
 Order savedOrder = orderRepository.save(newOrder);  // ✅ Returns saved document
 ```
 
-**When NOT to enable content response:**
+**⚠️ Reactor / reactive streams — never set `contentResponseOnWriteEnabled(false)` on `CosmosAsyncClient`:**
 
-If you don't need the created document (fire-and-forget writes), leave it disabled to save bandwidth:
+When using `CosmosAsyncClient` with Project Reactor, setting `contentResponseOnWriteEnabled(false)` causes `CosmosItemResponse.getItem()` to return `null`. Reactor does not allow `null` signals in its pipeline (Reactive Streams Specification, Rule 2.13), so any downstream `.map(CosmosItemResponse::getItem)` or similar operator throws a `NullPointerException` from inside Reactor internals — not from your code — making the root cause very hard to diagnose.
 
 ```java
-// High-throughput ingestion - don't need response content
+// ❌ Causes NPE in reactive stream — never do this with CosmosAsyncClient
+CosmosAsyncClient asyncClient = new CosmosClientBuilder()
+    .endpoint(endpoint)
+    .key(key)
+    .contentResponseOnWriteEnabled(false)
+    .buildAsyncClient();
+
+container.upsertItem(item)
+    .map(CosmosItemResponse::getItem)  // ❌ getItem() returns null → NPE
+    .block();
+```
+
+```java
+// ✅ Option 1 (recommended): Keep content response enabled for async clients
+CosmosAsyncClient asyncClient = new CosmosClientBuilder()
+    .endpoint(endpoint)
+    .key(key)
+    .contentResponseOnWriteEnabled(true)
+    .buildAsyncClient();
+
+container.upsertItem(item)
+    .map(CosmosItemResponse::getItem)  // ✅ Non-null, safe in Reactor
+    .block();
+```
+
+```java
+// ✅ Option 2: If you must suppress content, guard against null before mapping
+container.upsertItem(item)
+    .flatMap(response -> {
+        MyItem result = response.getItem();
+        return result != null ? Mono.just(result) : Mono.empty();
+    });
+```
+
+**When NOT to enable content response:**
+
+If you don't need the created document (fire-and-forget writes) **and you are using the synchronous `CosmosClient`**, leave it disabled to save bandwidth:
+
+```java
+// High-throughput ingestion with synchronous client - don't need response content
 CosmosItemRequestOptions options = new CosmosItemRequestOptions();
 options.setContentResponseOnWriteEnabled(false);  // Default, saves bandwidth
 
@@ -3640,28 +3874,38 @@ for (Order order : ordersToInsert) {
 Enabling content response does NOT increase RU cost - the document is already fetched server-side for the write operation. It only affects the response payload size over the network.
 
 **Key Points:**
-- Java SDK returns null by default for created/upserted items
-- Enable `contentResponseOnWriteEnabled(true)` to get documents back
+- `readItem()`, `createItem()`, `upsertItem()`, and `replaceItem()` all return `CosmosItemResponse<T>` — always call `.getItem()` to get `T`
+- In reactive/async code, use `.map(response -> response.getItem())` to unwrap the entity from the `Mono`
+- Java SDK returns null from `getItem()` by default for created/upserted items — enable `contentResponseOnWriteEnabled(true)` to get documents back after writes
 - Can be set at client level (all operations) or per-request
-- Spring Data Cosmos handles this automatically
-- Disable for high-throughput scenarios where response content is not needed
+- Spring Data Cosmos handles both unwrapping and content response automatically
+- **Never set `contentResponseOnWriteEnabled(false)` with `CosmosAsyncClient` / reactive streams** — it causes `NullPointerException` in the Reactor pipeline
+- Only disable content response for high-throughput fire-and-forget writes with the synchronous `CosmosClient`
 
 Reference: [Azure Cosmos DB Java SDK best practices](https://learn.microsoft.com/azure/cosmos-db/nosql/best-practice-java)
 
 ### 4.10 Use dependent @Bean methods for Cosmos DB initialization in Spring Boot
 
-**Impact: HIGH** (prevents circular dependency and startup failures)
+**Impact: HIGH** (prevents circular dependency, startup failures, class name collisions, and compile errors)
 
 ## Use Dependent @Bean Methods for Cosmos DB Initialization in Spring Boot
 
 When configuring `CosmosClient`, `CosmosDatabase`, and `CosmosContainer` beans in a Spring Boot `@Configuration` class, use dependent `@Bean` methods with parameter injection instead of `@PostConstruct`. Calling a `@Bean` method from `@PostConstruct` in the same class creates a circular dependency that crashes the application on startup.
+
+Follow these additional rules to avoid common startup failures:
+
+1. **Do not name your configuration class `CosmosConfig`.** This collides with `com.azure.spring.data.cosmos.config.CosmosConfig` in the Spring Data Cosmos SDK, causing cascading compile errors. Use `CosmosDbConfig`, `CosmosConfiguration`, or `AppCosmosConfig` instead.
+
+2. **Always call `createDatabaseIfNotExists()` before `createContainerIfNotExists()`.** On a fresh Cosmos DB instance (including the emulator), the database does not exist. Calling `createContainerIfNotExists()` without first ensuring the database exists throws `CosmosException: NotFound`.
+
+3. **When extending `AbstractCosmosConfiguration`, do not annotate `cosmosClientBuilder()` with `@Override`.** It is not declared as overridable in `AbstractCosmosConfiguration`. Provide it as a `@Bean` method instead. The only method you should override is `getDatabaseName()`.
 
 **Incorrect (@PostConstruct calling @Bean — circular dependency):**
 
 ```java
 // ❌ Anti-pattern: @PostConstruct + @Bean in same class causes circular dependency
 @Configuration
-public class CosmosConfig {
+public class CosmosDbConfig {
 
     @Value("${azure.cosmos.endpoint}")
     private String endpoint;
@@ -3706,7 +3950,7 @@ public class CosmosConfig {
 ```java
 // ✅ Correct: Use @Bean dependency injection chain — initialization in bean methods
 @Configuration
-public class CosmosConfig {
+public class CosmosDbConfig {
 
     @Value("${azure.cosmos.endpoint}")
     private String endpoint;
@@ -3804,14 +4048,89 @@ public SmartInitializingSingleton cosmosInitializer(CosmosContainer container) {
 }
 ```
 
+**Common mistake: Missing `createDatabaseIfNotExists()` before container creation:**
+
+```java
+// ❌ Crashes on a fresh Cosmos DB instance — database doesn't exist yet
+@EventListener(ApplicationReadyEvent.class)
+public void initializeCosmosDb() {
+    CosmosAsyncClient client = cosmosAsyncClient();
+    CosmosAsyncDatabase db = client.getDatabase(databaseName);
+    db.createContainerIfNotExists(containerName,
+        "/partitionKey").block();  // CosmosException: Database not found
+}
+```
+
+```java
+// ✅ Always create the database first
+@EventListener(ApplicationReadyEvent.class)
+public void initializeCosmosDb() {
+    CosmosAsyncClient client = cosmosAsyncClient();
+    client.createDatabaseIfNotExists(databaseName).block();  // ← required
+    CosmosAsyncDatabase db = client.getDatabase(databaseName);
+    db.createContainerIfNotExists(containerName,
+        "/partitionKey").block();
+}
+```
+
+**When extending `AbstractCosmosConfiguration`:**
+
+```java
+// ❌ cosmosClientBuilder() is not overridable — compile error
+@Configuration
+@EnableCosmosRepositories
+public class CosmosDbConfig extends AbstractCosmosConfiguration {
+
+    @Override  // ❌ "method does not override or implement a method from a supertype"
+    public CosmosClientBuilder cosmosClientBuilder() {
+        return new CosmosClientBuilder()
+            .endpoint(endpoint)
+            .key(key);
+    }
+
+    @Override
+    protected String getDatabaseName() {
+        return databaseName;
+    }
+}
+```
+
+```java
+// ✅ Provide cosmosClientBuilder() as a @Bean, only override getDatabaseName()
+@Configuration
+@EnableCosmosRepositories
+public class CosmosDbConfig extends AbstractCosmosConfiguration {
+
+    @Bean  // ✅ Not an override — declare as a bean
+    public CosmosClientBuilder cosmosClientBuilder() {
+        return new CosmosClientBuilder()
+            .endpoint(endpoint)
+            .key(key)
+            .consistencyLevel(ConsistencyLevel.SESSION)
+            .contentResponseOnWriteEnabled(true);
+    }
+
+    @Override  // ✅ getDatabaseName() is the only overridable method
+    protected String getDatabaseName() {
+        return databaseName;
+    }
+}
+```
+
 **Key Points:**
 - Never call `@Bean` methods from `@PostConstruct` in the same `@Configuration` class
 - Use parameter injection in `@Bean` methods to express initialization order
 - Always set `destroyMethod = "close"` on `CosmosClient` bean
 - Keep `CosmosClient` as a singleton `@Bean` (Rule 4.16)
 - Set `contentResponseOnWriteEnabled(true)` in the builder (Rule 4.9)
+- Do not name your configuration class `CosmosConfig` — it collides with `com.azure.spring.data.cosmos.config.CosmosConfig`
+- Always call `createDatabaseIfNotExists()` before `createContainerIfNotExists()`
+- When extending `AbstractCosmosConfiguration`, use `@Bean` (not `@Override`) on `cosmosClientBuilder()`
 
-Reference: [Spring Framework @Bean documentation](https://docs.spring.io/spring-framework/reference/core/beans/java/bean-annotation.html)
+References:
+- [Spring Framework @Bean documentation](https://docs.spring.io/spring-framework/reference/core/beans/java/bean-annotation.html)
+- [`CosmosAsyncClient.createDatabaseIfNotExists()` Javadoc](https://learn.microsoft.com/java/api/com.azure.cosmos.cosmosasyncclient?view=azure-java-stable)
+- [`AbstractCosmosConfiguration` Javadoc](https://learn.microsoft.com/java/api/com.azure.spring.data.cosmos.config.abstractcosmosconfiguration?view=azure-java-stable)
 
 ### 4.11 Spring Boot and Java version compatibility for Cosmos DB SDK
 
@@ -4313,7 +4632,55 @@ Best practices:
 
 Reference: [Configure preferred regions](https://learn.microsoft.com/azure/cosmos-db/nosql/tutorial-global-distribution)
 
-### 4.15 Handle 429 Errors with Retry-After
+### 4.15 Include aiohttp When Using Python Async SDK
+
+**Impact: HIGH** (prevents application startup failure)
+
+## Include aiohttp When Using Python Async SDK
+
+When using the Azure Cosmos DB Python SDK's async client (`azure.cosmos.aio`), you **must** explicitly install `aiohttp` as a dependency. The `azure-cosmos` package does not automatically install `aiohttp` — it is an optional dependency required only for async operations.
+
+**Incorrect (missing aiohttp — application will crash on startup):**
+
+```txt
+# requirements.txt
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+azure-cosmos>=4.6.0
+```
+
+```python
+# main.py — this import will fail at runtime without aiohttp
+from azure.cosmos.aio import CosmosClient
+```
+
+Error: `ModuleNotFoundError: No module named 'aiohttp'`
+
+**Correct (aiohttp explicitly listed):**
+
+```txt
+# requirements.txt
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+azure-cosmos>=4.6.0
+aiohttp>=3.9.0
+```
+
+```python
+# main.py — works correctly with aiohttp installed
+from azure.cosmos.aio import CosmosClient
+```
+
+**Alternative — use the sync client if async is not needed:**
+
+```python
+# No aiohttp required for synchronous usage
+from azure.cosmos import CosmosClient
+```
+
+Reference: [Azure Cosmos DB Python SDK](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/sdk-python)
+
+### 4.16 Handle 429 Errors with Retry-After
 
 **Impact: HIGH** (prevents cascading failures)
 
@@ -4430,7 +4797,7 @@ await Task.WhenAll(tasks);
 
 Reference: [Handle rate limiting](https://learn.microsoft.com/azure/cosmos-db/nosql/troubleshoot-request-rate-too-large)
 
-### 4.16 Use consistent enum serialization between Cosmos SDK and application layer
+### 4.17 Use consistent enum serialization between Cosmos SDK and application layer
 
 **Impact: critical** (undefined)
 
@@ -4527,7 +4894,7 @@ public class Order
 - Point reads work but filtered queries don't
 - API returns different enum format than stored in Cosmos DB
 
-### 4.17 Reuse CosmosClient as Singleton
+### 4.18 Reuse CosmosClient as Singleton
 
 **Impact: CRITICAL** (prevents connection exhaustion)
 
@@ -4648,7 +5015,7 @@ public class CosmosDbHostedService : IHostedService
 
 Reference: [CosmosClient best practices](https://learn.microsoft.com/azure/cosmos-db/nosql/best-practice-dotnet)
 
-### 4.18 Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs
+### 4.19 Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs
 
 **Impact: CRITICAL** (prevents startup failures and data access errors in Spring Data Cosmos applications)
 
@@ -4735,13 +5102,32 @@ public class Owner {
    private String partitionKey;
    ```
 
-3. **Remove ALL `jakarta.persistence.*` imports** — they cause compilation errors after removing JPA dependencies
+3. **The container's partition key path must match the `@PartitionKey` field name** — when creating a container programmatically, the partition key path must be `/<fieldName>` where `fieldName` is the Java field annotated with `@PartitionKey`. A mismatch causes `IllegalArgumentException: partitionKey must not be null` or silent data routing errors at runtime:
+   ```java
+   // ❌ Wrong: container path "/id" doesn't match @PartitionKey field "playerId"
+   @Container(containerName = "players")
+   public class Player {
+       @Id
+       @GeneratedValue
+       private String id;
 
-4. **Remove relationship annotations** — `@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@JoinColumn` have no Cosmos equivalent. Use ID references or embedded data instead (see `model-embed-related` and `model-relationship-references` rules).
+       @PartitionKey
+       private String playerId;
+   }
+   // Container created with: new CosmosContainerProperties("players", "/id")
+   // Runtime error: IllegalArgumentException: partitionKey must not be null
+
+   // ✅ Correct: container path matches @PartitionKey field name
+   // Container created with: new CosmosContainerProperties("players", "/playerId")
+   ```
+
+4. **Remove ALL `jakarta.persistence.*` imports** — they cause compilation errors after removing JPA dependencies
+
+5. **Remove relationship annotations** — `@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@JoinColumn` have no Cosmos equivalent. Use ID references or embedded data instead (see `model-embed-related` and `model-relationship-references` rules).
 
 Reference: [Spring Data Azure Cosmos DB annotations](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-java-spring-data)
 
-### 4.19 Use CosmosRepository correctly and handle Iterable return types
+### 4.20 Use CosmosRepository correctly and handle Iterable return types
 
 **Impact: HIGH** (prevents ClassCastException and query failures in Spring Data Cosmos repositories)
 
@@ -4838,7 +5224,94 @@ Reference: [Spring Data Azure Cosmos DB repository](https://learn.microsoft.com/
 
 **Impact: MEDIUM-HIGH**
 
-### 5.1 Use Composite Indexes for ORDER BY
+### 5.1 Composite Index Directions Must Match ORDER BY
+
+**Impact: HIGH** (prevents query failures and rejected sorts)
+
+## Composite Index Directions Must Match ORDER BY
+
+Every composite index entry must specify sort directions that **exactly match** the `ORDER BY` clause of the queries it serves. If the directions don't match, Cosmos DB will reject the query or fall back to an expensive scan.
+
+For cross-partition `ORDER BY` queries, this is especially critical — the query **will fail** if no matching composite index exists.
+
+**Incorrect (direction mismatch — query fails):**
+
+```python
+# Composite index defined as descending
+indexing_policy = {
+    "compositeIndexes": [
+        [{"path": "/score", "order": "descending"}]
+    ]
+}
+
+# But query uses ascending order — no matching index!
+query = "SELECT * FROM c ORDER BY c.score ASC"
+# Fails: "The order by query does not have a corresponding composite index"
+```
+
+```csharp
+// Index covers (score DESC) only
+new Collection<CompositePath>
+{
+    new CompositePath { Path = "/score", Order = CompositePathSortOrder.Descending }
+}
+
+// Query needs ASC — fails!
+var query = "SELECT * FROM c ORDER BY c.score ASC";
+```
+
+**Correct (directions match exactly, with both orderings):**
+
+```python
+# Define BOTH directions to support ASC and DESC queries
+indexing_policy = {
+    "compositeIndexes": [
+        [{"path": "/score", "order": "descending"}],
+        [{"path": "/score", "order": "ascending"}]
+    ]
+}
+```
+
+```csharp
+// Always provide both sort directions for each composite index pattern
+CompositeIndexes =
+{
+    // For ORDER BY score DESC
+    new Collection<CompositePath>
+    {
+        new CompositePath { Path = "/score", Order = CompositePathSortOrder.Descending }
+    },
+    // For ORDER BY score ASC
+    new Collection<CompositePath>
+    {
+        new CompositePath { Path = "/score", Order = CompositePathSortOrder.Ascending }
+    }
+}
+```
+
+```python
+# Multi-property example: provide paired directions
+indexing_policy = {
+    "compositeIndexes": [
+        # For ORDER BY gameId ASC, score DESC
+        [
+            {"path": "/gameId", "order": "ascending"},
+            {"path": "/score", "order": "descending"}
+        ],
+        # For ORDER BY gameId DESC, score ASC (reverse pair)
+        [
+            {"path": "/gameId", "order": "descending"},
+            {"path": "/score", "order": "ascending"}
+        ]
+    ]
+}
+```
+
+**Best practice: whenever you define a composite index, always include the inverse direction pair** so that both ASC and DESC queries on those paths are served.
+
+Reference: [Composite index sort order](https://learn.microsoft.com/azure/cosmos-db/index-policy#composite-indexes)
+
+### 5.2 Use Composite Indexes for ORDER BY
 
 **Impact: HIGH** (enables sorted queries, reduces RU)
 
@@ -5011,7 +5484,7 @@ Rules:
 
 Reference: [Composite indexes](https://learn.microsoft.com/azure/cosmos-db/index-policy#composite-indexes)
 
-### 5.2 Exclude Unused Index Paths
+### 5.3 Exclude Unused Index Paths
 
 **Impact: HIGH** (reduces write RU by 20-80%)
 
@@ -5047,31 +5520,25 @@ Exclude paths from indexing that you never query. Every indexed path adds write 
 // Write cost includes indexing auditLog array - wasted RU
 ```
 
-**Correct (selective indexing):**
+**Correct (exclude-all-first, then include back):**
 
 ```csharp
-// Include only queried paths
+// Exclude everything, then include only what you query
 var indexingPolicy = new IndexingPolicy
 {
     IndexingMode = IndexingMode.Consistent,
     Automatic = true,
     
-    // Only include paths you actually query
+    // Start with exclude all — no field is indexed by default
+    ExcludedPaths = { new ExcludedPath { Path = "/*" } },
+    
+    // Explicitly include only what you query
     IncludedPaths =
     {
         new IncludedPath { Path = "/customerId/?" },
         new IncludedPath { Path = "/status/?" },
         new IncludedPath { Path = "/orderDate/?" },
         new IncludedPath { Path = "/total/?" }
-    },
-    
-    // Exclude everything else (especially large arrays)
-    ExcludedPaths =
-    {
-        new ExcludedPath { Path = "/items/*" },         // Embedded array
-        new ExcludedPath { Path = "/internalNotes/?" },
-        new ExcludedPath { Path = "/auditLog/*" },      // Large array
-        new ExcludedPath { Path = "/_etag/?" }          // System field
     }
 };
 
@@ -5088,33 +5555,44 @@ var containerProperties = new ContainerProperties
 {
     "indexingMode": "consistent",
     "automatic": true,
+    "excludedPaths": [
+        { "path": "/*" }
+    ],
     "includedPaths": [
         { "path": "/customerId/?" },
         { "path": "/status/?" },
-        { "path": "/orderDate/?" }
-    ],
-    "excludedPaths": [
-        { "path": "/items/*" },
-        { "path": "/auditLog/*" },
-        { "path": "/*" }  // Exclude all other paths
+        { "path": "/orderDate/?" },
+        { "path": "/total/?" }
     ]
 }
 ```
 
+⚠️ **Alternative (less optimal — indexes all paths by default):**
+
 ```csharp
-// Alternative: exclude all, include specific
+// Selectively include and exclude paths
+// WARNING: any new fields added to documents are auto-indexed
 var indexingPolicy = new IndexingPolicy
 {
     IndexingMode = IndexingMode.Consistent,
+    Automatic = true,
     
-    // Start with exclude all
-    ExcludedPaths = { new ExcludedPath { Path = "/*" } },
-    
-    // Explicitly include only what you query
+    // Only include paths you actually query
     IncludedPaths =
     {
         new IncludedPath { Path = "/customerId/?" },
-        new IncludedPath { Path = "/orderDate/?" }
+        new IncludedPath { Path = "/status/?" },
+        new IncludedPath { Path = "/orderDate/?" },
+        new IncludedPath { Path = "/total/?" }
+    },
+    
+    // Exclude known unused paths (but new fields still auto-indexed)
+    ExcludedPaths =
+    {
+        new ExcludedPath { Path = "/items/*" },         // Embedded array
+        new ExcludedPath { Path = "/internalNotes/?" },
+        new ExcludedPath { Path = "/auditLog/*" },      // Large array
+        new ExcludedPath { Path = "/_etag/?" }          // System field
     }
 };
 ```
@@ -5126,7 +5604,7 @@ Monitor and adjust:
 
 Reference: [Indexing policies](https://learn.microsoft.com/azure/cosmos-db/index-policy)
 
-### 5.3 Understand Indexing Modes
+### 5.4 Understand Indexing Modes
 
 **Impact: MEDIUM** (balances write speed vs query consistency)
 
@@ -5244,7 +5722,7 @@ Note: Lazy mode was deprecated - use Consistent instead.
 
 Reference: [Indexing modes](https://learn.microsoft.com/azure/cosmos-db/index-policy#indexing-mode)
 
-### 5.4 Choose Appropriate Index Types
+### 5.5 Choose Appropriate Index Types
 
 **Impact: MEDIUM** (optimizes query performance)
 
@@ -5373,7 +5851,7 @@ Index type summary:
 
 Reference: [Index types](https://learn.microsoft.com/azure/cosmos-db/index-overview)
 
-### 5.5 Add Spatial Indexes for Geo Queries
+### 5.6 Add Spatial Indexes for Geo Queries
 
 **Impact: MEDIUM-HIGH** (enables efficient location queries)
 
@@ -7606,16 +8084,112 @@ var query = ordersByStatusContainer.GetItemQueryIterator<OrderStatusView>(
 | Better scalability | Eventual consistency (slight delay) |
 | Lower RU cost per query | RU cost for writes to both containers |
 
+**⚠️ Change Feed delivers events at-least-once.** Your handler MUST be idempotent — processing the same event twice must produce the same result. Never use `counter += 1` or `get() + 1` patterns in Change Feed handlers, as event replay will silently double-count.
+
+**Incorrect — non-idempotent handler (counter drift on replay):**
+
+```java
+// ❌ WRONG — at-least-once replay doubles counts
+private void handleChanges(List<JsonNode> changes, ChangeFeedProcessorContext context) {
+    for (JsonNode node : changes) {
+        GameScore score = objectMapper.treeToValue(node, GameScore.class);
+        PlayerProfile profile = playerRepository.findById(score.getPlayerId()).orElseGet(PlayerProfile::new);
+        profile.setTotalGamesPlayed(profile.getTotalGamesPlayed() + 1); // NON-IDEMPOTENT
+        profile.setTotalScore(profile.getTotalScore() + score.getScore()); // NON-IDEMPOTENT
+        playerRepository.save(profile);
+    }
+}
+```
+
+```csharp
+// ❌ WRONG — same problem in .NET
+async Task HandleChangesAsync(IReadOnlyCollection<GameScore> changes, CancellationToken ct)
+{
+    foreach (var score in changes)
+    {
+        var profile = await GetProfileAsync(score.PlayerId);
+        profile.TotalGamesPlayed += 1;  // NON-IDEMPOTENT
+        profile.TotalScore += score.Score;  // NON-IDEMPOTENT
+        await SaveProfileAsync(profile);
+    }
+}
+```
+
+**Correct — idempotent alternatives:**
+
+Use one of these patterns to ensure safe replay:
+
+**1. Replace pattern — write absolute values, not deltas:**
+
+```java
+// ✅ CORRECT — replace with absolute value from the event
+private void handleChanges(List<JsonNode> changes, ChangeFeedProcessorContext context) {
+    for (JsonNode node : changes) {
+        GameScore score = objectMapper.treeToValue(node, GameScore.class);
+        PlayerProfile profile = playerRepository.findById(score.getPlayerId()).orElseGet(PlayerProfile::new);
+        // Idempotent: same event replayed produces same result
+        profile.setHighScore(Math.max(profile.getHighScore(), score.getScore()));
+        playerRepository.save(profile);
+    }
+}
+```
+
+**2. Conditional write — use ETags to detect duplicate processing:**
+
+```csharp
+// ✅ CORRECT — ETag prevents duplicate processing
+async Task HandleChangesAsync(IReadOnlyCollection<GameScore> changes, CancellationToken ct)
+{
+    foreach (var score in changes)
+    {
+        var response = await container.ReadItemAsync<PlayerProfile>(
+            score.PlayerId, new PartitionKey(score.PlayerId));
+        var profile = response.Resource;
+        profile.HighScore = Math.Max(profile.HighScore, score.Score);
+        await container.ReplaceItemAsync(profile, profile.Id,
+            new PartitionKey(profile.Id),
+            new ItemRequestOptions { IfMatchEtag = response.ETag });
+    }
+}
+```
+
+**3. Mark-and-rebuild — flag affected records and recalculate from source of truth:**
+
+```python
+# ✅ CORRECT — mark dirty and rebuild from source data
+async def handle_changes(changes):
+    for change in changes:
+        player_id = change["playerId"]
+        # Mark the profile as needing recalculation
+        await profiles_container.patch_item(
+            item=player_id,
+            partition_key=player_id,
+            patch_operations=[
+                {"op": "set", "path": "/needsRecalc", "value": True}
+            ]
+        )
+    # Separate process recalculates from source of truth
+```
+
+| Idempotent Pattern | When to Use | Trade-off |
+|--------------------|-------------|-----------|
+| Replace (absolute value) | High scores, latest status, max/min values | Only works for non-cumulative data |
+| Conditional write (ETag) | Any update where you can detect duplicates | Extra read + possible retry on conflict |
+| Mark-and-rebuild | Counters, aggregations, cumulative totals | Higher latency, requires rebuild process |
+
 **Key Points:**
+- **Change Feed delivers at-least-once** — handlers MUST be idempotent
 - Change Feed provides reliable, ordered event stream of all document changes
 - Materialized views trade storage cost for query efficiency
 - Updates are eventually consistent (typically <1 second delay)
 - Use lease container to track processor progress (enables resume after failures)
+- Never use `counter += 1`, `total += value`, or `get() + 1` patterns in Change Feed handlers
 - Consider Azure Functions with Cosmos DB trigger for serverless implementation
-- Consider Global Secondary Index (GSI) implementation as alternative for automatic sync between containers with different partition keys. 
+- Consider Global Secondary Index (GSI) implementation as alternative for automatic sync between containers with different partition keys
 
 Reference(s): 
 [Change feed in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/change-feed)
+[Change feed design patterns in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/change-feed-design-patterns)
 [Global Secondary Indexes (GSI) in Azure Cosmos DB](https://learn.microsoft.com/en-us/azure/cosmos-db/global-secondary-indexes)
 
 ### 9.2 Use count-based or cached rank approaches instead of full partition scans for ranking
