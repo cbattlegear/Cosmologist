@@ -12,7 +12,7 @@ January 2026
 
 ## Abstract
 
-Performance optimization and best practices guide for Azure Cosmos DB applications, ordered by impact. Contains rules for data modeling, partition key design, query optimization, SDK usage, indexing, throughput management, global distribution, and monitoring.
+Performance optimization and best practices guide for Azure Cosmos DB applications, ordered by impact. Contains rules for data modeling, partition key design, query optimization, SDK usage, indexing, throughput management, global distribution, monitoring, developer tooling, and vector search.
 
 ---
 
@@ -35,38 +35,47 @@ Performance optimization and best practices guide for Azure Cosmos DB applicatio
    - 2.2 [Distribute Writes to Avoid Hot Partitions](#22-distribute-writes-to-avoid-hot-partitions)
    - 2.3 [Use Hierarchical Partition Keys for Flexibility](#23-use-hierarchical-partition-keys-for-flexibility)
    - 2.4 [Choose High-Cardinality Partition Keys](#24-choose-high-cardinality-partition-keys)
-   - 2.5 [Respect Partition Key Value Length Limits](#25-respect-partition-key-value-length-limits)
-   - 2.6 [Align Partition Key with Query Patterns](#26-align-partition-key-with-query-patterns)
-   - 2.7 [Create Synthetic Partition Keys When Needed](#27-create-synthetic-partition-keys-when-needed)
+   - 2.5 [Choose Immutable Properties as Partition Keys](#25-choose-immutable-properties-as-partition-keys)
+   - 2.6 [Respect Partition Key Value Length Limits](#26-respect-partition-key-value-length-limits)
+   - 2.7 [Align Partition Key with Query Patterns](#27-align-partition-key-with-query-patterns)
+   - 2.8 [Create Synthetic Partition Keys When Needed](#28-create-synthetic-partition-keys-when-needed)
 3. [Query Optimization](#3-query-optimization) — **HIGH**
-   - 3.1 [Minimize Cross-Partition Queries](#31-minimize-cross-partition-queries)
-   - 3.2 [Avoid Full Container Scans](#32-avoid-full-container-scans)
-   - 3.3 [Order Filters by Selectivity](#33-order-filters-by-selectivity)
-   - 3.4 [Use Continuation Tokens for Pagination](#34-use-continuation-tokens-for-pagination)
-   - 3.5 [Use Parameterized Queries](#35-use-parameterized-queries)
-   - 3.6 [Use Literal Integers for TOP, Never Parameters](#36-use-literal-integers-for-top-never-parameters)
-   - 3.7 [Project Only Needed Fields](#37-project-only-needed-fields)
+   - 3.1 [Compute min/max/avg with one scoped aggregate query](#31-compute-min-max-avg-with-one-scoped-aggregate-query)
+   - 3.2 [Minimize Cross-Partition Queries](#32-minimize-cross-partition-queries)
+   - 3.3 [Avoid Full Container Scans](#33-avoid-full-container-scans)
+   - 3.4 [Query "latest" documents with explicit ORDER BY and TOP 1](#34-query-latest-documents-with-explicit-order-by-and-top-1)
+   - 3.5 [Detect and Redirect Analytical Queries Away from Transactional Containers](#35-detect-and-redirect-analytical-queries-away-from-transactional-containers)
+   - 3.6 [Order Filters by Selectivity](#36-order-filters-by-selectivity)
+   - 3.7 [Use Continuation Tokens for Pagination](#37-use-continuation-tokens-for-pagination)
+   - 3.8 [Use Parameterized Queries](#38-use-parameterized-queries)
+   - 3.9 [Use Point Reads Instead of Queries for Known ID and Partition Key](#39-use-point-reads-instead-of-queries-for-known-id-and-partition-key)
+   - 3.10 [Parameterize TOP Values Safely](#310-parameterize-top-values-safely)
+   - 3.11 [Project Only Needed Fields](#311-project-only-needed-fields)
 4. [SDK Best Practices](#4-sdk-best-practices) — **HIGH**
    - 4.1 [Use Async APIs for Better Throughput](#41-use-async-apis-for-better-throughput)
    - 4.2 [Configure Threshold-Based Availability Strategy (Hedging)](#42-configure-threshold-based-availability-strategy-hedging-)
    - 4.3 [Configure Partition-Level Circuit Breaker](#43-configure-partition-level-circuit-breaker)
-   - 4.4 [Use Direct Connection Mode for Production](#44-use-direct-connection-mode-for-production)
-   - 4.5 [Log Diagnostics for Troubleshooting](#45-log-diagnostics-for-troubleshooting)
-   - 4.6 [Configure SSL and connection mode for Cosmos DB Emulator](#46-configure-ssl-and-connection-mode-for-cosmos-db-emulator)
-   - 4.7 [Use ETags for optimistic concurrency on read-modify-write operations](#47-use-etags-for-optimistic-concurrency-on-read-modify-write-operations)
-   - 4.8 [Configure Excluded Regions for Dynamic Failover](#48-configure-excluded-regions-for-dynamic-failover)
-   - 4.9 [Unwrap CosmosItemResponse and enable content response in Java SDK](#49-unwrap-cosmositemresponse-and-enable-content-response-in-java-sdk)
-   - 4.10 [Use dependent @Bean methods for Cosmos DB initialization in Spring Boot](#410-use-dependent-bean-methods-for-cosmos-db-initialization-in-spring-boot)
-   - 4.11 [Spring Boot and Java version compatibility for Cosmos DB SDK](#411-spring-boot-and-java-version-compatibility-for-cosmos-db-sdk)
-   - 4.12 [Configure local development environment to avoid cloud connection conflicts](#412-configure-local-development-environment-to-avoid-cloud-connection-conflicts)
-   - 4.13 [Explicitly reference Newtonsoft.Json package](#413-explicitly-reference-newtonsoft-json-package)
-   - 4.14 [Configure Preferred Regions for Availability](#414-configure-preferred-regions-for-availability)
-   - 4.15 [Include aiohttp When Using Python Async SDK](#415-include-aiohttp-when-using-python-async-sdk)
-   - 4.16 [Handle 429 Errors with Retry-After](#416-handle-429-errors-with-retry-after)
-   - 4.17 [Use consistent enum serialization between Cosmos SDK and application layer](#417-use-consistent-enum-serialization-between-cosmos-sdk-and-application-layer)
-   - 4.18 [Reuse CosmosClient as Singleton](#418-reuse-cosmosclient-as-singleton)
-   - 4.19 [Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs](#419-annotate-entities-for-spring-data-cosmos-with-container-partitionkey-and-string-ids)
-   - 4.20 [Use CosmosRepository correctly and handle Iterable return types](#420-use-cosmosrepository-correctly-and-handle-iterable-return-types)
+   - 4.4 [Use IfNoneMatchETag("*") for conditional creates to prevent duplicates](#44-use-ifnonematchetag-for-conditional-creates-to-prevent-duplicates)
+   - 4.5 [Use Direct Connection Mode for Production](#45-use-direct-connection-mode-for-production)
+   - 4.6 [Guard against empty continuation tokens before calling byPage](#46-guard-against-empty-continuation-tokens-before-calling-bypage)
+   - 4.7 [Log Diagnostics for Troubleshooting](#47-log-diagnostics-for-troubleshooting)
+   - 4.8 [Configure SSL and connection mode for Cosmos DB Emulator](#48-configure-ssl-and-connection-mode-for-cosmos-db-emulator)
+   - 4.9 [Use ETags for optimistic concurrency on read-modify-write operations](#49-use-etags-for-optimistic-concurrency-on-read-modify-write-operations)
+   - 4.10 [Configure Excluded Regions for Dynamic Failover](#410-configure-excluded-regions-for-dynamic-failover)
+   - 4.11 [Unwrap CosmosItemResponse and enable content response in Java SDK](#411-unwrap-cosmositemresponse-and-enable-content-response-in-java-sdk)
+   - 4.12 [Use dependent @Bean methods for Cosmos DB initialization in Spring Boot](#412-use-dependent-bean-methods-for-cosmos-db-initialization-in-spring-boot)
+   - 4.13 [Spring Boot and Java version compatibility for Cosmos DB SDK](#413-spring-boot-and-java-version-compatibility-for-cosmos-db-sdk)
+   - 4.14 [Configure local development environment to avoid cloud connection conflicts](#414-configure-local-development-environment-to-avoid-cloud-connection-conflicts)
+   - 4.15 [Explicitly reference Newtonsoft.Json package](#415-explicitly-reference-newtonsoft-json-package)
+   - 4.16 [Use the Patch API for atomic counter increments](#416-use-the-patch-api-for-atomic-counter-increments)
+   - 4.17 [Configure Preferred Regions for Availability](#417-configure-preferred-regions-for-availability)
+   - 4.18 [Include aiohttp When Using Python Async SDK](#418-include-aiohttp-when-using-python-async-sdk)
+   - 4.19 [Never share a single CosmosItemRequestOptions instance across multiple createItem calls](#419-never-share-a-single-cosmositemrequestoptions-instance-across-multiple-createitem-calls)
+   - 4.20 [Handle 429 Errors with Retry-After](#420-handle-429-errors-with-retry-after)
+   - 4.21 [Use consistent enum serialization between Cosmos SDK and application layer](#421-use-consistent-enum-serialization-between-cosmos-sdk-and-application-layer)
+   - 4.22 [Reuse CosmosClient as Singleton](#422-reuse-cosmosclient-as-singleton)
+   - 4.23 [Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs](#423-annotate-entities-for-spring-data-cosmos-with-container-partitionkey-and-string-ids)
+   - 4.24 [Use CosmosRepository correctly and handle Iterable return types](#424-use-cosmosrepository-correctly-and-handle-iterable-return-types)
 5. [Indexing Strategies](#5-indexing-strategies) — **MEDIUM-HIGH**
    - 5.1 [Composite Index Directions Must Match ORDER BY](#51-composite-index-directions-must-match-order-by)
    - 5.2 [Use Composite Indexes for ORDER BY](#52-use-composite-indexes-for-order-by)
@@ -97,6 +106,17 @@ Performance optimization and best practices guide for Azure Cosmos DB applicatio
    - 9.1 [Use Change Feed for cross-partition query optimization with materialized views](#91-use-change-feed-for-cross-partition-query-optimization-with-materialized-views)
    - 9.2 [Use count-based or cached rank approaches instead of full partition scans for ranking](#92-use-count-based-or-cached-rank-approaches-instead-of-full-partition-scans-for-ranking)
    - 9.3 [Use a service layer to hydrate document references before rendering](#93-use-a-service-layer-to-hydrate-document-references-before-rendering)
+   - 9.4 [Use Point Reads for AI-Grounding and RAG Retrieval When ID Is Known](#94-use-point-reads-for-ai-grounding-and-rag-retrieval-when-id-is-known)
+10. [Developer Tooling](#10-developer-tooling) — **MEDIUM**
+   - 10.1 [Use Azure Cosmos DB Emulator for local development and testing](#101-use-azure-cosmos-db-emulator-for-local-development-and-testing)
+   - 10.2 [Use Azure Cosmos DB VS Code extension for routine inspection and management](#102-use-azure-cosmos-db-vs-code-extension-for-routine-inspection-and-management)
+11. [Vector Search](#11-vector-search) — **HIGH**
+   - 11.1 [Use VectorDistance for Similarity Search](#111-use-vectordistance-for-similarity-search)
+   - 11.2 [Define Vector Embedding Policy](#112-define-vector-embedding-policy)
+   - 11.3 [Enable Vector Search Feature on Account](#113-enable-vector-search-feature-on-account)
+   - 11.4 [Configure Vector Indexes in Indexing Policy](#114-configure-vector-indexes-in-indexing-policy)
+   - 11.5 [Normalize Embeddings for Cosine Similarity](#115-normalize-embeddings-for-cosine-similarity)
+   - 11.6 [Implement Repository Pattern for Vector Search](#116-implement-repository-pattern-for-vector-search)
 
 ---
 
@@ -247,6 +267,65 @@ Denormalize when:
 - Query patterns benefit from co-located data
 
 *Additional strategies to consider for denormalization*:
+**Pre-computed Aggregates** :
+   - Definition: When an entity is frequently read and the read response includes aggregated statistics (counts, averages, totals), store those aggregates as persistent document fields rather than computing them per-request
+   - When to use:
+     - The entity's read response includes derived values such as counts, sums, averages, or min/max
+     - Reads significantly outnumber writes (high read-to-write ratio)
+     - Computing aggregates on-demand would require COUNT/AVG/SUM queries or application-level iteration
+   - Update strategy: Update aggregate fields inline at write time (within the same operation that records new data) or asynchronously via Change Feed
+   - Include a `lastUpdated` timestamp field to enable staleness detection
+
+   **Incorrect (aggregates computed on-demand):**
+
+   ```java
+   @Container(containerName = "players")
+   public class PlayerProfile {
+       @Id
+       private String id;
+       @PartitionKey
+       private String playerId;
+       private String displayName;
+       private int bestScore;
+       // No stored aggregates — totalGamesPlayed requires COUNT query,
+       // averageScore requires AVG query or app-level computation per request
+   }
+   ```
+
+   **Correct (pre-computed aggregates stored as fields):**
+
+   ```java
+   @Container(containerName = "players")
+   public class PlayerProfile {
+       @Id
+       private String id;
+       @PartitionKey
+       private String playerId;
+       private String displayName;
+       private int bestScore;
+       private int totalGamesPlayed;   // pre-computed, updated at write time
+       private double averageScore;     // pre-computed, updated at write time
+       private long lastUpdated;        // timestamp for staleness detection
+   }
+   ```
+
+   ```csharp
+   // Updating aggregates inline at write time
+   public async Task RecordGameScore(string playerId, int score)
+   {
+       var profile = await container.ReadItemAsync<PlayerProfile>(
+           playerId, new PartitionKey(playerId));
+       var p = profile.Resource;
+       p.TotalGamesPlayed += 1;
+       p.BestScore = Math.Max(p.BestScore, score);
+       p.AverageScore = p.TotalGamesPlayed == 1
+           ? score
+           : ((p.AverageScore * (p.TotalGamesPlayed - 1)) + score) / p.TotalGamesPlayed;
+       p.LastUpdated = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+       await container.ReplaceItemAsync(p, p.Id, new PartitionKey(playerId));
+   }
+   ```
+
 **Short-Circuit Denormalization** :
    - Definition: Duplicate *only specific fields* (not the full related document) to avoid a cross-partition lookup
    - When to use:
@@ -269,6 +348,122 @@ Denormalize when:
 
    Decision: Choose option with lower total RU/s when workload profile details available
    ```
+
+**Cascade Delete and Update of Denormalized Documents**:
+
+   When a source document is **deleted** or a key field used in denormalized copies is **updated**, all related derived documents in other containers must be updated or removed. Failing to cascade deletes/updates leaves orphaned or stale denormalized data, which causes queries to return ghost entries (deleted entities still appearing in listings) or outdated information (entities appearing under old field values).
+
+   This is one of the most commonly missed patterns: developers implement the source document delete/update correctly but forget to propagate the change to all containers that hold derived documents.
+
+   **Cascade DELETE — remove all related documents when source is deleted:**
+
+   ```python
+   # ❌ WRONG — only deletes the source document, orphans derived documents
+   async def delete_player(player_id: str):
+       await players_container.delete_item(item=player_id, partition_key=player_id)
+       # Missing: delete from scores container
+       # Missing: delete from leaderboard container
+   ```
+
+   ```python
+   # ✅ CORRECT — cascade delete across all related containers
+   async def delete_player(player_id: str):
+       # 1. Delete the source document
+       await players_container.delete_item(item=player_id, partition_key=player_id)
+
+       # 2. Delete all related score documents (different container, same partition key)
+       scores_query = "SELECT c.id FROM c WHERE c.playerId = @pid"
+       async for page in scores_container.query_items(
+           query=scores_query, parameters=[{"name": "@pid", "value": player_id}]
+       ):
+           await scores_container.delete_item(item=page["id"], partition_key=player_id)
+
+       # 3. Delete all leaderboard entries for this player (derived documents)
+       lb_query = "SELECT c.id, c.leaderboardKey FROM c WHERE c.playerId = @pid"
+       async for entry in leaderboard_container.query_items(
+           query=lb_query, parameters=[{"name": "@pid", "value": player_id}],
+           enable_cross_partition_query=True,
+       ):
+           await leaderboard_container.delete_item(
+               item=entry["id"], partition_key=entry["leaderboardKey"]
+           )
+   ```
+
+   ```csharp
+   // ✅ CORRECT — .NET cascade delete
+   public async Task DeletePlayerAsync(string playerId)
+   {
+       // 1. Delete source
+       await _playersContainer.DeleteItemAsync<Player>(playerId, new PartitionKey(playerId));
+
+       // 2. Delete related scores
+       var scoreQuery = new QueryDefinition("SELECT c.id FROM c WHERE c.playerId = @pid")
+           .WithParameter("@pid", playerId);
+       await foreach (var score in _scoresContainer.GetItemQueryIterator<dynamic>(
+               scoreQuery, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(playerId) }))
+           await _scoresContainer.DeleteItemAsync<dynamic>(score.id, new PartitionKey(playerId));
+
+       // 3. Delete derived leaderboard entries (enumerate all leaderboard partitions or use cross-partition query)
+       var lbQuery = new QueryDefinition("SELECT c.id, c.leaderboardKey FROM c WHERE c.playerId = @pid")
+           .WithParameter("@pid", playerId);
+       await foreach (var entry in _leaderboardContainer.GetItemQueryIterator<dynamic>(lbQuery))
+           await _leaderboardContainer.DeleteItemAsync<dynamic>(
+               (string)entry.id, new PartitionKey((string)entry.leaderboardKey));
+   }
+   ```
+
+   **Cascade UPDATE — re-derive documents when a partitioning field changes:**
+
+   When an entity has a field that determines which partition its derived documents belong to (e.g., a `region` field used as the leaderboard partition key), updating that field requires:
+   1. Deleting the old derived documents from the previous partition  
+   2. Creating new derived documents in the new partition
+
+   ```python
+   # ❌ WRONG — updates player region but leaves stale leaderboard entry in old region
+   async def update_player(player_id: str, updates: dict):
+       player = await players_container.read_item(item=player_id, partition_key=player_id)
+       player.update(updates)
+       await players_container.replace_item(item=player_id, body=player)
+       # Missing: remove leaderboard entry from old region, add to new region
+   ```
+
+   ```python
+   # ✅ CORRECT — cascade update when a partition-key field changes
+   async def update_player(player_id: str, updates: dict):
+       player = await players_container.read_item(item=player_id, partition_key=player_id)
+       old_region = player.get("region")
+       player.update(updates)
+       new_region = player.get("region")
+       await players_container.replace_item(item=player_id, body=player)
+
+       if "region" in updates and old_region != new_region:
+           # Remove old regional leaderboard entry
+           old_key = f"{old_region}_all-time"
+           try:
+               await leaderboard_container.delete_item(
+                   item=player_id, partition_key=old_key
+               )
+           except Exception:
+               pass  # May not exist if player had no scores
+
+           # Re-create in new regional leaderboard if player has scores
+           if player.get("bestScore", 0) > 0:
+               new_key = f"{new_region}_all-time"
+               new_entry = {
+                   "id": player_id,
+                   "leaderboardKey": new_key,
+                   "playerId": player_id,
+                   "displayName": player["displayName"],
+                   "score": player["bestScore"],
+               }
+               await leaderboard_container.upsert_item(body=new_entry)
+   ```
+
+   **Key rules for cascade operations:**
+   - **Every DELETE endpoint** for an entity that has denormalized copies elsewhere must also delete those copies
+   - **Every UPDATE endpoint** that changes a field used in derived documents must propagate the change
+   - If the updated field is a partition key of the derived container, you must delete-and-recreate (Cosmos DB does not support updating partition key values)
+   - Consider listing all containers where derived data lives in a comment near each delete/update handler
 
 Reference: [Denormalization patterns](https://learn.microsoft.com/azure/cosmos-db/nosql/modeling-data#denormalization)
 
@@ -981,6 +1176,10 @@ Reference: [Data modeling in Azure Cosmos DB](https://learn.microsoft.com/azure/
 
 Include schema version in documents to handle evolution gracefully. This enables safe migrations and backward-compatible reads.
 
+For multi-entity or event-heavy workloads, apply this to **every persisted document type** (for example: metadata documents, events, telemetry records, and denormalized read models), not just top-level business entities.
+
+Use a consistent field name such as `schemaVersion` (camelCase) and set it at write time so raw document checks, migrations, and mixed-version readers all work reliably.
+
 **Incorrect (no version tracking):**
 
 ```csharp
@@ -1436,12 +1635,96 @@ var doc = await container.ReadItemAsync<Document>(
         .Build());
 ```
 
+**Python SDK example (hierarchical partition keys):**
+
+```python
+from azure.cosmos import PartitionKey
+
+# Incorrect: single-level partition key for a large tenant workload
+container = await database.create_container_if_not_exists(
+    id="documents",
+    partition_key=PartitionKey(path="/tenantId"),
+)
+
+# Correct: hierarchical partition key (broadest -> narrowest)
+container = await database.create_container_if_not_exists(
+    id="documents",
+    partition_key=PartitionKey(
+        path=["/tenantId", "/year", "/month"],
+        kind="MultiHash",
+    ),
+)
+
+# Point read with full partition key path values
+item = await container.read_item(
+    item="doc-123",
+    partition_key=["acme-corp", 2026, 1],
+)
+
+# Prefix query scoped to Level 1 + Level 2
+items = container.query_items(
+    query="SELECT * FROM c WHERE c.tenantId = @tenant AND c.year = @year",
+    parameters=[
+        {"name": "@tenant", "value": "acme-corp"},
+        {"name": "@year", "value": 2026},
+    ],
+    partition_key=["acme-corp", 2026],
+)
+```
+
+**Order levels from broadest to narrowest scope.** HPK prefix queries work left-to-right — a query can efficiently target Level 1 alone, Levels 1+2, or Levels 1+2+3, but cannot efficiently target Level 3 alone without scanning all Level 1 and Level 2 combinations. Place the property that appears in the most queries at Level 1 (broadest), the next most common at Level 2, and the most granular at Level 3. This ensures the dominant access pattern always benefits from prefix-based routing.
+
+**❌ Wrong — narrow before broad:**
+
+```csharp
+// Misordered: narrow scope before broad scope
+var containerProperties = new ContainerProperties
+{
+    Id = "documents",
+    PartitionKeyPaths = new List<string> 
+    { 
+        "/month",      // Level 1: Narrow (only 12 values)
+        "/year",       // Level 2: Medium cardinality
+        "/tenantId"    // Level 3: Broadest — but it's last!
+    }
+};
+
+// Prefix queries work LEFT to RIGHT:
+// ✅ Query by month only → targets 1 of 12 level-1 groups (very coarse, rarely useful)
+// ✅ Query by month + year → targets specific month-year combo
+// ❌ Query by tenantId ONLY → must scan ALL month/year combinations
+//    because tenantId is at level 3, not queryable as a prefix
+// The most common query ("get all docs for a tenant") becomes the MOST expensive
+```
+
+**✅ Right — broad to narrow:**
+
+```csharp
+// Correct: broad → narrow ordering
+var containerProperties = new ContainerProperties
+{
+    Id = "documents",
+    PartitionKeyPaths = new List<string> 
+    { 
+        "/tenantId",   // Level 1: Broadest — most common filter
+        "/year",       // Level 2: Time-based narrowing
+        "/month"       // Level 3: Finest granularity
+    }
+};
+
+// Prefix queries work efficiently:
+// ✅ Query by tenantId → targets all partitions for ONE tenant
+// ✅ Query by tenantId + year → narrows to tenant's yearly data
+// ✅ Query by tenantId + year + month → single logical partition
+// The most common query ("get all docs for a tenant") is the CHEAPEST
+```
+
 Benefits of HPK:
 - Each level combination creates separate logical partitions (no 20GB limit per tenant)
 - Queries can target specific levels for efficiency
 - Natural data organization (tenant → year → month)
 
-Reference: [Hierarchical partition keys](https://learn.microsoft.com/azure/cosmos-db/hierarchical-partition-keys)
+Reference: [Hierarchical partition keys](https://learn.microsoft.com/en-us/azure/cosmos-db/hierarchical-partition-keys?tabs=python%2Cbicep#sdk)
 
 ### 2.4 Choose High-Cardinality Partition Keys
 
@@ -1521,7 +1804,50 @@ Good partition keys typically:
 
 Reference: [Partitioning in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/partitioning-overview)
 
-### 2.5 Respect Partition Key Value Length Limits
+### 2.5 Choose Immutable Properties as Partition Keys
+
+**Impact: HIGH** (prevents data integrity issues from non-atomic key changes)
+
+## Choose Immutable Properties as Partition Keys
+
+Cosmos DB partition keys are immutable — you cannot update a document's partition key value in place. Changing it requires deleting the original document and reinserting with the new key, a non-atomic operation that risks data loss. Prefer creation-time values that never change.
+
+**Incorrect (mutable field as partition key):**
+
+```csharp
+// Anti-pattern: status changes throughout the document lifecycle
+public class Order
+{
+    public string Id { get; set; }
+    public string Status { get; set; }  // ❌ Partition key — but it changes!
+}
+
+// "Updating" the partition key does NOT move the document between partitions
+order.Status = "shipped";
+await container.ReplaceItemAsync(order, order.Id, new PartitionKey("shipped"));
+```
+
+**Correct (immutable field as partition key):**
+
+```csharp
+public class Order
+{
+    public string Id { get; set; }
+    public string CustomerId { get; set; }  // ✅ Set at creation, never changes
+    public string Status { get; set; }       // Mutable — but NOT the partition key
+}
+
+order.Status = "shipped";
+await container.ReplaceItemAsync(order, order.Id, new PartitionKey(order.CustomerId));
+```
+
+**Never use as partition keys:** status fields, workflow stages, ownership/assignment fields, or any property updated during the document lifecycle.
+
+**Safe choices:** entity identifiers (userId, tenantId, deviceId), creation-time values, or synthetic keys derived from immutable fields.
+
+Reference: [Change partition key value](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-change-partition-key-value)
+
+### 2.6 Respect Partition Key Value Length Limits
 
 **Impact: HIGH** (prevents write failures from oversized keys)
 
@@ -1600,7 +1926,7 @@ Key points:
 
 Reference: [Azure Cosmos DB service quotas - Per-item limits](https://learn.microsoft.com/azure/cosmos-db/concepts-limits#per-item-limits)
 
-### 2.6 Align Partition Key with Query Patterns
+### 2.7 Align Partition Key with Query Patterns
 
 **Impact: CRITICAL** (enables single-partition queries)
 
@@ -1684,7 +2010,7 @@ public class Message
 
 Reference: [Choose a partition key](https://learn.microsoft.com/azure/cosmos-db/partitioning-overview#choose-a-partition-key)
 
-### 2.7 Create Synthetic Partition Keys When Needed
+### 2.8 Create Synthetic Partition Keys When Needed
 
 **Impact: HIGH** (optimizes for multiple access patterns)
 
@@ -1798,7 +2124,73 @@ References:
 
 **Impact: HIGH**
 
-### 3.1 Minimize Cross-Partition Queries
+### 3.1 Compute min/max/avg with one scoped aggregate query
+
+**Impact: HIGH** (prevents incorrect stats from partial reads or mismatched filters)
+
+## Compute min/max/avg with one scoped aggregate query
+
+For endpoint statistics, compute `MIN`, `MAX`, and `AVG` from the same filtered dataset in a single Cosmos DB query whenever possible. Avoid mixing values from separate queries, partial pages, or different time windows, which produces mathematically inconsistent results.
+
+**Incorrect (client-side aggregation over partial or inconsistent data):**
+
+```java
+// ❌ Reads only first page and computes stats from incomplete data
+CosmosPagedIterable<JsonNode> page = container.queryItems(
+    "SELECT * FROM c WHERE c.deviceId = @deviceId",
+    new CosmosQueryRequestOptions(),
+    JsonNode.class
+);
+
+List<JsonNode> docs = page.stream().limit(50).toList(); // arbitrary subset
+double min = docs.stream().mapToDouble(d -> d.get("temperature").asDouble()).min().orElse(0);
+double max = docs.stream().mapToDouble(d -> d.get("temperature").asDouble()).max().orElse(0);
+double avg = docs.stream().mapToDouble(d -> d.get("temperature").asDouble()).average().orElse(0);
+```
+
+```python
+# ❌ Different filters per metric cause inconsistent results
+min_q = "SELECT VALUE MIN(c.humidity) FROM c WHERE c.deviceId = @id"
+max_q = "SELECT VALUE MAX(c.humidity) FROM c WHERE c.deviceId = @id AND c.timestamp > @start"
+avg_q = "SELECT VALUE AVG(c.humidity) FROM c WHERE c.deviceId = @id AND c.timestamp > @start"
+```
+
+**Correct (single-pass aggregate query with consistent filters):**
+
+```java
+// ✅ One query, one filter set, consistent aggregate outputs
+String sql = """
+    SELECT
+      MIN(c.temperature) AS minTemp,
+      MAX(c.temperature) AS maxTemp,
+      AVG(c.temperature) AS avgTemp,
+      MIN(c.humidity) AS minHumidity,
+      MAX(c.humidity) AS maxHumidity,
+      AVG(c.humidity) AS avgHumidity
+    FROM c
+    WHERE c.deviceId = @deviceId
+      AND c.timestamp >= @start
+      AND c.timestamp <= @end
+    """;
+```
+
+```python
+# ✅ Use one scoped aggregate query
+query = """
+SELECT
+  MIN(c.value) AS minValue,
+  MAX(c.value) AS maxValue,
+  AVG(c.value) AS avgValue
+FROM c
+WHERE c.entityId = @id AND c.timestamp >= @start AND c.timestamp <= @end
+"""
+```
+
+Use a partition key aligned with the aggregation scope (for example, per-entity/per-device stats) so the query stays efficient and predictable.
+
+Reference: [Aggregate functions in Azure Cosmos DB for NoSQL](https://learn.microsoft.com/azure/cosmos-db/nosql/query/aggregate-functions) | [Query performance tips](https://learn.microsoft.com/azure/cosmos-db/nosql/performance-tips-query-sdk)
+
+### 3.2 Minimize Cross-Partition Queries
 
 **Impact: HIGH** (reduces RU by 5-100x)
 
@@ -1911,7 +2303,7 @@ Strategies to avoid cross-partition:
 
 Reference: [Query patterns](https://learn.microsoft.com/azure/cosmos-db/nosql/query/getting-started)
 
-### 3.2 Avoid Full Container Scans
+### 3.3 Avoid Full Container Scans
 
 **Impact: HIGH** (prevents unbounded RU consumption)
 
@@ -1995,7 +2387,178 @@ Console.WriteLine($"Index Hit: {response.Diagnostics}");
 
 Reference: [Query optimization](https://learn.microsoft.com/azure/cosmos-db/nosql/query-metrics)
 
-### 3.3 Order Filters by Selectivity
+### 3.4 Query "latest" documents with explicit ORDER BY and TOP 1
+
+**Impact: HIGH** (prevents stale or nondeterministic "latest item" results)
+
+## Query "latest" documents with explicit ORDER BY and TOP 1
+
+When returning the latest item for an entity (latest reading, latest status, most recent event), always query with an explicit time field sort and `TOP 1`: `ORDER BY <timestampField> DESC`. Without explicit ordering, Cosmos DB does not guarantee result order and may return an older document.
+
+**Incorrect (no deterministic ordering):**
+
+```java
+// ❌ No ORDER BY: can return an older document
+String sql = "SELECT TOP 1 * FROM c WHERE c.deviceId = @deviceId";
+SqlQuerySpec spec = new SqlQuerySpec(
+    sql,
+    List.of(new SqlParameter("@deviceId", deviceId))
+);
+```
+
+```python
+# ❌ Client picks "first" item from an unordered query
+query = "SELECT * FROM c WHERE c.userId = @uid"
+items = list(container.query_items(
+    query=query,
+    parameters=[{"name": "@uid", "value": user_id}],
+    enable_cross_partition_query=True
+))
+latest = items[0] if items else None
+```
+
+**Correct (explicit timestamp sort + TOP 1):**
+
+```java
+// ✅ Deterministic latest item by timestamp
+String sql = """
+    SELECT TOP 1 * FROM c
+    WHERE c.deviceId = @deviceId AND IS_DEFINED(c.timestamp)
+    ORDER BY c.timestamp DESC
+    """;
+SqlQuerySpec spec = new SqlQuerySpec(
+    sql,
+    List.of(new SqlParameter("@deviceId", deviceId))
+);
+```
+
+```python
+# ✅ Deterministic latest item
+query = """
+SELECT TOP 1 * FROM c
+WHERE c.userId = @uid AND IS_DEFINED(c.createdAt)
+ORDER BY c.createdAt DESC
+"""
+items = list(container.query_items(
+    query=query,
+    parameters=[{"name": "@uid", "value": user_id}],
+    enable_cross_partition_query=True
+))
+latest = items[0] if items else None
+```
+
+If the query can span partitions, define the needed index policy for your filter + sort pattern (for example, a composite index when required by your query shape).
+
+Reference: [ORDER BY in Azure Cosmos DB for NoSQL](https://learn.microsoft.com/azure/cosmos-db/nosql/query/order-by) | [TOP keyword](https://learn.microsoft.com/azure/cosmos-db/nosql/query/keywords#top)
+
+### 3.5 Detect and Redirect Analytical Queries Away from Transactional Containers
+
+**Impact: HIGH** (prevents RU starvation, 429 throttling cascades, and query timeouts)
+
+## Detect and Redirect Analytical Queries Away from Transactional Containers
+
+**Impact: HIGH (prevents RU starvation, 429 throttling cascades, and query timeouts)**
+
+Cosmos DB's transactional store is optimized for OLTP: point reads, targeted queries within a partition, and bounded result sets. Analytical patterns — COUNT/SUM/AVG across all partitions, GROUP BY over unbounded data, or full-container scans for reporting — consume massive RU, trigger sustained 429 throttling that starves transactional operations, and can exceed the query execution timeout.
+
+Do not run large aggregations, unbounded GROUP BY, or full-container scans against transactional Cosmos DB containers. For analytical workloads, use Azure Synapse Link with analytical store, Change Feed materialized views, or dedicated reporting containers.
+
+Single-partition aggregations scoped to a known partition key with bounded data are acceptable — the concern is unbounded cross-partition scans.
+
+**Correct (enable analytical store and run aggregations via Synapse Link — zero RU impact on transactional store):**
+
+```csharp
+// ✅ Enable analytical store on the container
+var containerProperties = new ContainerProperties
+{
+    Id = "orders",
+    PartitionKeyPath = "/customerId",
+    AnalyticalStoreTimeToLiveInSeconds = -1  // Enable analytical store
+};
+
+// ✅ Run aggregations via Synapse Link (no RU consumed on transactional store)
+// In Synapse SQL or Spark:
+// SELECT region, COUNT(*) as orderCount, SUM(total) as revenue
+// FROM cosmos_db.orders WHERE orderDate >= '2025-01-01' GROUP BY region
+```
+
+**Correct (pre-compute aggregates incrementally via Change Feed materialized views):**
+
+```csharp
+// ✅ Maintain real-time aggregations via Change Feed processor
+public class SalesAggregate
+{
+    public string Id { get; set; }           // "category-electronics"
+    public string PartitionKey { get; set; } // "aggregates"
+    public string Category { get; set; }
+    public long TotalSold { get; set; }
+    public decimal AveragePrice { get; set; }
+    public DateTime LastUpdated { get; set; }
+}
+
+// Dashboard reads pre-computed aggregates: 1 RU per point read
+// Instead of recalculating from millions of source documents each time
+```
+
+**Correct (single-partition aggregation scoped to a known partition key is acceptable):**
+
+```csharp
+// ✅ Bounded, single-partition aggregation — acceptable cost
+var query = new QueryDefinition(
+    "SELECT VALUE COUNT(1) FROM c WHERE c.customerId = @cid AND c.status = 'pending'")
+    .WithParameter("@cid", customerId);
+
+var iterator = container.GetItemQueryIterator<int>(query,
+    requestOptions: new QueryRequestOptions
+    {
+        PartitionKey = new PartitionKey(customerId)  // Scoped to ONE partition
+    });
+```
+
+**Incorrect (unbounded aggregation across all partitions — fans out to every partition, massive RU):**
+
+```csharp
+// ❌ Unbounded aggregation across all partitions
+var query = "SELECT c.region, COUNT(1) as orderCount, SUM(c.total) as revenue " +
+            "FROM c WHERE c.orderDate >= '2025-01-01' GROUP BY c.region";
+
+var iterator = container.GetItemQueryIterator<dynamic>(query);
+// Fans out to ALL partitions, reads ALL matching documents
+// At 10M orders: potentially 50,000+ RU per execution
+// Blocks transactional traffic with sustained high RU consumption
+```
+
+**Incorrect (dashboard refreshing aggregations against transactional store):**
+
+```python
+# ❌ Dashboard refreshing aggregations against transactional store
+def get_dashboard_metrics(self):
+    queries = [
+        "SELECT VALUE COUNT(1) FROM c",                           # Full scan
+        "SELECT c.status, COUNT(1) FROM c GROUP BY c.status",     # Unbounded GROUP BY
+        "SELECT VALUE AVG(c.responseTime) FROM c WHERE c.type = 'request'"  # Cross-partition AVG
+    ]
+    # Each query scans the entire container
+    # Running these every 30 seconds for a dashboard = sustained throttling
+```
+
+**Incorrect (reporting query running against operational container):**
+
+```java
+// ❌ Reporting query running against operational container
+@Query("SELECT c.category, SUM(c.quantity) as totalSold, AVG(c.price) as avgPrice " +
+       "FROM c WHERE c.type = 'sale' GROUP BY c.category")
+List<CategorySalesReport> getCategorySalesReport();
+// Full cross-partition scan + aggregation — hundreds of thousands of RU
+// Competes with real-time order processing for the same throughput budget
+```
+
+References:
+- [Azure Synapse Link for Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/synapse-link)
+- [Analytical store overview](https://learn.microsoft.com/azure/cosmos-db/analytical-store-introduction)
+- [Change Feed materialized views pattern](https://learn.microsoft.com/azure/cosmos-db/nosql/change-feed-design-patterns#materialized-views)
+
+### 3.6 Order Filters by Selectivity
 
 **Impact: MEDIUM** (reduces intermediate result sets)
 
@@ -2070,7 +2633,7 @@ var query3 = "SELECT * FROM c WHERE c.status IN ('a', 'b') AND c.customerId = @i
 
 Reference: [Query optimization tips](https://learn.microsoft.com/azure/cosmos-db/nosql/performance-tips-query-sdk)
 
-### 3.4 Use Continuation Tokens for Pagination
+### 3.7 Use Continuation Tokens for Pagination
 
 **Impact: HIGH** (enables efficient large result sets)
 
@@ -2176,6 +2739,56 @@ public async Task<IActionResult> GetProducts(
 }
 ```
 
+```python
+# ❌ Anti-pattern: OFFSET/LIMIT cost grows with page depth
+async def get_scores_page_with_offset(container, player_id: str, page: int, page_size: int = 20):
+    offset = (page - 1) * page_size
+    query = (
+        "SELECT * FROM c "
+        "WHERE c.playerId = @playerId "
+        "ORDER BY c.submittedAt DESC "
+        f"OFFSET {offset} LIMIT {page_size}"
+    )
+    items = container.query_items(
+        query=query,
+        parameters=[{"name": "@playerId", "value": player_id}],
+        partition_key=player_id,
+    )
+    return [item async for item in items]
+
+
+# ✅ Preferred: continuation token pagination (stable RU per page)
+async def get_scores_page(
+    container,
+    player_id: str,
+    page_size: int = 20,
+    continuation_token: str | None = None,
+):
+    query = (
+        "SELECT * FROM c "
+        "WHERE c.playerId = @playerId "
+        "ORDER BY c.submittedAt DESC"
+    )
+
+    results = container.query_items(
+        query=query,
+        parameters=[{"name": "@playerId", "value": player_id}],
+        partition_key=player_id,
+        max_item_count=page_size,
+    )
+
+    pager = results.by_page(continuation_token=continuation_token)
+    page = await pager.__anext__()
+    items = [item async for item in page]
+
+    return {
+        "items": items,
+        "continuationToken": pager.continuation_token,
+    }
+```
+
+Python SDK note: Continuation tokens are supported for single-partition queries. Always set `partition_key` when using `by_page()`.
+
 ```csharp
 // Streaming through all results
 public async IAsyncEnumerable<Product> GetAllProducts()
@@ -2238,9 +2851,9 @@ public PagedResult<Task> getTasksByProject(
 
 **Rule of thumb:** If a query can return more than 100 items, it **must** use pagination.
 
-Reference: [Pagination in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/query/pagination)
+Reference: [Pagination in Azure Cosmos DB](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/query/pagination)
 
-### 3.5 Use Parameterized Queries
+### 3.8 Use Parameterized Queries
 
 **Impact: MEDIUM** (improves security and query plan caching)
 
@@ -2328,59 +2941,260 @@ Benefits:
 
 Reference: [Parameterized queries](https://learn.microsoft.com/azure/cosmos-db/nosql/query/parameterized-queries)
 
-### 3.6 Use Literal Integers for TOP, Never Parameters
+### 3.9 Use Point Reads Instead of Queries for Known ID and Partition Key
 
-**Impact: HIGH** (prevents query failures at runtime)
+**Impact: HIGH** (1 RU vs ~2.5 RU per single-document lookup)
 
-## Use Literal Integers for TOP, Never Parameters
+## Use Point Reads Instead of Queries for Known ID and Partition Key
 
-The `TOP` keyword in Cosmos DB SQL requires a literal integer — it does **not** support parameterized values. Using `@param` in `SELECT TOP @param` will fail at runtime with a query syntax error.
+When both the document `id` and partition key value are known, use a point read (`ReadItemAsync` / `read_item` / `readItem`) instead of a query. A point read costs 1 RU for a 1 KB document and bypasses the query engine entirely. An equivalent `SELECT * FROM c WHERE c.id = @id` query costs ~2.5 RU because the query engine still parses, optimizes, and executes even though the result is a single document.
 
-**Incorrect (parameterized TOP — fails at runtime):**
-
-```python
-# This causes a 400 Bad Request or runtime error
-query = "SELECT TOP @top * FROM c ORDER BY c.score DESC"
-params = [{"name": "@top", "value": 10}]
-items = container.query_items(query, parameters=params, enable_cross_partition_query=True)
-```
+**Incorrect (query when both id and partition key are known):**
 
 ```csharp
-// This will also fail
-var query = new QueryDefinition("SELECT TOP @top * FROM c ORDER BY c.score DESC")
-    .WithParameter("@top", 10);
+// ❌ Uses query engine when a point read would suffice
+var query = new QueryDefinition("SELECT * FROM c WHERE c.id = @id")
+    .WithParameter("@id", orderId);
+
+var iterator = container.GetItemQueryIterator<Order>(query,
+    requestOptions: new QueryRequestOptions
+    {
+        PartitionKey = new PartitionKey(customerId)
+    });
+
+var response = await iterator.ReadNextAsync();
+return response.FirstOrDefault();
+// Cost: ~2.5 RU for a 1 KB document (query engine overhead)
 ```
 
-**Correct (literal integer in TOP clause):**
+```python
+# ❌ Query instead of point read
+def get_player(self, player_id: str, game_id: str):
+    query = "SELECT * FROM c WHERE c.id = @id"
+    items = list(self.container.query_items(
+        query=query,
+        parameters=[{"name": "@id", "value": player_id}],
+        partition_key=game_id
+    ))
+    return items[0] if items else None
+    # Unnecessary query engine invocation
+```
+
+```typescript
+// ❌ Query instead of point read — id and partition key both known
+const { resources } = await container.items
+  .query<Order>({
+    query: 'SELECT * FROM c WHERE c.id = @id',
+    parameters: [{ name: '@id', value: orderId }],
+  }, { partitionKey: userId })
+  .fetchAll();
+return resources[0] ?? null;
+// ~2.92 RU — goes through the query engine for a single known document
+```
+
+**Correct (point read — bypasses query engine):**
+
+```csharp
+// ✅ Point read — 1 RU for a 1 KB document, no query engine overhead
+var response = await container.ReadItemAsync<Order>(
+    orderId,
+    new PartitionKey(customerId));
+return response.Resource;
+```
 
 ```python
-# Use a literal integer for TOP — validate and cast to int to prevent injection
-top = int(top)  # Ensures it's a safe integer
+# ✅ Point read — 1 RU, no query engine overhead
+def get_player(self, player_id: str, game_id: str):
+    return self.container.read_item(item=player_id, partition_key=game_id)
+```
+
+```java
+// ✅ Point read in Java SDK
+CosmosItemResponse<Order> response = container.readItem(
+    orderId,
+    new PartitionKey(customerId),
+    Order.class);
+return response.getItem();
+```
+
+```typescript
+// ✅ Point read in Node.js — 1 RU, no query engine overhead
+const { resource: order } = await container.item(orderId, userId).read<Order>();
+return order ?? null;
+```
+
+### Multiple Known Documents — ReadMany vs. Parallel Point Reads
+
+When fetching multiple documents by known `(id, partitionKey)` pairs, you have two options:
+
+1. **Client-side parallel point reads** — issue individual `ReadItem` calls concurrently
+2. **ReadMany** — batch all `(id, partitionKey)` pairs into a single SDK call
+
+ReadMany targets only the relevant partitions and avoids the query engine, but the performance tradeoff depends on batch size, client resources, and document size. Small batches can be slower than aggressively parallel point reads on a well-provisioned client, while larger batches tend to reduce both latency and RU cost. **Benchmark both approaches** with your actual workload before committing to one.
+
+**⚠️ Avoid using OR/IN queries across partition keys — these fan out to all partitions regardless of how many documents you need:**
+
+```csharp
+// ❌ OR/IN clause spanning multiple partition keys — cross-partition fan-out
+var query = new QueryDefinition(
+    "SELECT * FROM c WHERE c.id IN (@id1, @id2, @id3)")
+    .WithParameter("@id1", "order-1")
+    .WithParameter("@id2", "order-2")
+    .WithParameter("@id3", "order-3");
+// Fans out to ALL partitions to find 3 documents — RU scales with partition count
+```
+
+**✅ ReadMany — targeted reads, no fan-out (best for larger batches; benchmark for your workload):**
+
+```csharp
+// ✅ ReadMany — targets only relevant partitions
+var items = new List<(string id, PartitionKey partitionKey)>
+{
+    ("order-1", new PartitionKey("customer-a")),
+    ("order-2", new PartitionKey("customer-b")),
+    ("order-3", new PartitionKey("customer-a"))
+};
+
+var response = await container.ReadManyItemsAsync<Order>(items);
+// Consistent cost — no cross-partition fan-out
+```
+
+```python
+# ✅ ReadMany in Python SDK
+items_to_read = [
+    ("order-1", "customer-a"),
+    ("order-2", "customer-b"),
+    ("order-3", "customer-a")
+]
+results = container.read_many_items(item_identities=items_to_read)
+```
+
+**✅ Parallel point reads — alternative for small batches on well-provisioned clients:**
+
+```csharp
+// ✅ Parallel point reads — can outperform ReadMany for small batches
+var tasks = new[]
+{
+    container.ReadItemAsync<Order>("order-1", new PartitionKey("customer-a")),
+    container.ReadItemAsync<Order>("order-2", new PartitionKey("customer-b")),
+    container.ReadItemAsync<Order>("order-3", new PartitionKey("customer-a"))
+};
+
+var responses = await Task.WhenAll(tasks);
+```
+
+```typescript
+// ❌ OR/IN across partitions — fans out to every partition
+const { resources } = await container.items.query<Order>({
+  query: 'SELECT * FROM c WHERE c.id IN (@a, @b, @c)',
+  parameters: [
+    { name: '@a', value: 'order-1' },
+    { name: '@b', value: 'order-2' },
+    { name: '@c', value: 'order-3' },
+  ],
+}).fetchAll();
+
+// ✅ Parallel point reads (@azure/cosmos v4 does not expose readMany;
+//    use bounded-concurrency parallel reads for batched lookups)
+const results = await Promise.all([
+  container.item('order-1', 'user-alice').read<Order>(),
+  container.item('order-2', 'user-bob').read<Order>(),
+  container.item('order-3', 'user-alice').read<Order>(),
+]);
+return results.map(r => r.resource).filter(Boolean);
+// Total RU ≈ N × 1.0; bound concurrency with a limiter for larger batches
+```
+
+### Validate parent existence with a point read before writing child records
+
+When writing a child/event document that references a parent entity (for example, reading → device, line item → order), do a parent point read first if your API requires rejecting unknown parents. This keeps referential checks cheap and avoids orphaned documents.
+
+```java
+// ✅ Fast referential validation (1 RU point read) before write
+try {
+    container.readItem(deviceId, new PartitionKey(deviceId), Device.class);
+} catch (CosmosException ex) {
+    if (ex.getStatusCode() == 404) {
+        throw new IllegalArgumentException("Unknown deviceId");
+    }
+    throw ex;
+}
+// write telemetry only after parent exists
+```
+
+```python
+# ❌ No existence check: creates orphan child records
+container.upsert_item({"id": event_id, "deviceId": device_id, "value": 42})
+```
+
+### When to Use Each Approach
+
+| Scenario | Approach |
+|----------|----------|
+| Single document with known id and partition key | **ReadItem** (point read) |
+| Multiple documents with known (id, partitionKey) pairs — large batch | **ReadMany** (benchmark to confirm) |
+| Multiple documents with known (id, partitionKey) pairs — small batch | **Parallel point reads** or **ReadMany** (benchmark both) |
+| Need filtering, sorting, projection, or aggregation | **Query** |
+| Exact ids and partition keys are not known | **Query** |
+
+Reference: [Point reads in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-read-item) | [ReadMany — read multiple items](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-dotnet-read-item#read-multiple-items) | [Read many items fast (Java)](https://devblogs.microsoft.com/cosmosdb/read-many-items-fast-with-the-java-sdk-for-azure-cosmos-db/)
+
+### 3.10 Parameterize TOP Values Safely
+
+**Impact: HIGH** (prevents incorrect query guidance and keeps parameterization secure)
+
+## Parameterize TOP Values Safely
+
+Cosmos DB SQL supports both literal and parameterized values for `TOP`. Prefer parameterized `TOP` values for consistency with secure query practices. Ensure the parameter value is an integer.
+
+**Incorrect (string interpolation for TOP):**
+
+```python
+# Avoid string interpolation when parameterization works
+top = int(top)
 query = f"SELECT TOP {top} * FROM c ORDER BY c.score DESC"
 items = container.query_items(query, enable_cross_partition_query=True)
 ```
 
 ```csharp
-// Interpolate a validated integer for TOP
+// Avoid interpolating TOP directly when parameters are available
 int topN = 10;
 var query = new QueryDefinition($"SELECT TOP {topN} * FROM c ORDER BY c.score DESC");
 ```
 
+**Correct (parameterized TOP):**
+
 ```python
-# Keep other values parameterized — only TOP must be literal
-top = int(top)
-query = f"SELECT TOP {top} * FROM c WHERE c.gameId = @gameId ORDER BY c.score DESC"
-params = [{"name": "@gameId", "value": game_id}]
+# TOP can be parameterized
+query = "SELECT TOP @top * FROM c ORDER BY c.score DESC"
+params = [{"name": "@top", "value": int(top)}]
 items = container.query_items(query, parameters=params, enable_cross_partition_query=True)
 ```
 
-Always cast the TOP value to `int` before interpolation to ensure it is a safe integer and prevent injection.
+```csharp
+var query = new QueryDefinition("SELECT TOP @top * FROM c ORDER BY c.score DESC")
+    .WithParameter("@top", 10);
+```
 
-Reference: [SQL query TOP keyword](https://learn.microsoft.com/azure/cosmos-db/nosql/query/select#top-keyword)
+```python
+# Keep all query values parameterized, including TOP
+query = "SELECT TOP @top * FROM c WHERE c.gameId = @gameId ORDER BY c.score DESC"
+params = [
+    {"name": "@top", "value": int(top)},
+    {"name": "@gameId", "value": game_id},
+]
+items = container.query_items(query, parameters=params, enable_cross_partition_query=True)
+```
 
-### 3.7 Project Only Needed Fields
+Use a literal integer in `TOP` only when it is genuinely constant at authoring time (for example, `TOP 10`).
 
-**Impact: HIGH** (reduces RU and network by 30-80%)
+References:
+- [Parameterized queries](https://learn.microsoft.com/azure/cosmos-db/nosql/query/parameterized-queries)
+- [SQL query TOP keyword](https://learn.microsoft.com/azure/cosmos-db/nosql/query/select#top-keyword)
+
+### 3.11 Project Only Needed Fields
+
+**Impact: HIGH** (reduces payload size, network bandwidth, and client memory; RU savings scale with document size — negligible on small flat docs, substantial on multi-KB/MB documents and large result sets)
 
 ## Project Only Needed Fields
 
@@ -2431,7 +3245,8 @@ var orders = await container.GetItemQueryIterator<OrderSummary>(
     requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(customerId) }
 ).ReadNextAsync();
 
-// 70% less data transferred, proportionally lower RU
+// Substantial payload-size reduction; RU savings depend on document size
+// (significant on large/nested docs, negligible on small flat docs)
 ```
 
 ```csharp
@@ -2465,6 +3280,75 @@ var orderSummaries = container.GetItemLinqQueryable<Order>(
         Status = o.Status
     })
     .ToFeedIterator();
+```
+
+### Prefer dedicated result types for projections
+
+When projecting fields, prefer deserializing into a dedicated DTO or record whose properties match the projected fields rather than reusing the full document model class. A dedicated result type makes the projection self-documenting, avoids confusion from null/default-valued properties that were not projected, and reduces the chance of developers reverting to `SELECT *` over time.
+
+```csharp
+// ✅ Preferred: Dedicated DTO matches projected fields exactly
+public class OrderSummary
+{
+    public string Id { get; set; }
+    public DateTime OrderDate { get; set; }
+    public decimal Total { get; set; }
+    public string Status { get; set; }
+}
+
+var iterator = container.GetItemQueryIterator<OrderSummary>(  // ✅ Matches projection
+    new QueryDefinition(query).WithParameter("@cid", customerId));
+```
+
+```java
+// ✅ Preferred: Dedicated projection record in Java
+public record PlayerSummary(String id, String playerName, int score) {}
+
+@Query("SELECT c.id, c.playerName, c.score FROM c WHERE c.leaderboardKey = @key")
+List<PlayerSummary> getTopPlayers(@Param("key") String key);
+```
+
+⚠️ Deserializing projected results into the full entity type is acceptable when the entity is small, the unprojected fields are not misleading, or the surrounding framework expects that type (e.g., Spring Data repository methods, EF Core entities). In these cases, ensure the intent is clear through comments or naming so that future maintainers do not mistakenly revert to `SELECT *`.
+
+### Node.js / TypeScript (@azure/cosmos v4)
+
+```typescript
+// ❌ Anti-pattern: SELECT * pulls every field including future additions
+const bad = {
+  query: 'SELECT * FROM c WHERE c.userId = @userId ORDER BY c.createdAt DESC',
+  parameters: [{ name: '@userId', value: userId }],
+};
+
+// ✅ Preferred: project only the fields the caller consumes
+const good = {
+  query: `
+    SELECT c.id, c.userId, c.status, c.total, c.createdAt
+    FROM c
+    WHERE c.userId = @userId
+    ORDER BY c.createdAt DESC
+  `,
+  parameters: [{ name: '@userId', value: userId }],
+};
+
+// TypeScript: dedicated result type matches the projected fields
+interface OrderSummary {
+  id: string;
+  userId: string;
+  status: string;
+  total: number;
+  createdAt: string;
+}
+const { resources } = await container.items
+  .query<OrderSummary>(good, { partitionKey: userId })
+  .fetchAll();
+
+// Single-column scalar with SELECT VALUE
+const { resources: statuses } = await container.items
+  .query<string>({
+    query: 'SELECT VALUE c.status FROM c WHERE c.userId = @u',
+    parameters: [{ name: '@u', value: userId }],
+  }, { partitionKey: userId })
+  .fetchAll();
 ```
 
 Savings multiply with:
@@ -2907,7 +3791,66 @@ Reference: [Performance tips - .NET SDK Circuit Breaker](https://learn.microsoft
 Reference: [Performance tips - Java SDK Circuit Breaker](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-java-sdk-v4#partition-level-circuit-breaker)
 Reference: [Performance tips - Python SDK Circuit Breaker](https://learn.microsoft.com/en-gb/azure/cosmos-db/performance-tips-python-sdk#partition-level-circuit-breaker)
 
-### 4.4 Use Direct Connection Mode for Production
+### 4.4 Use IfNoneMatchETag("*") for conditional creates to prevent duplicates
+
+**Impact: HIGH** (prevents duplicate documents on concurrent or retried creates without a prior read)
+
+## Use IfNoneMatchETag("*") for Conditional Creates to Prevent Duplicates
+
+**Impact: HIGH (prevents duplicate documents on concurrent or retried creates without a prior read)**
+
+When creating a document that must be unique (e.g., user credentials keyed by email), pass `IfNoneMatchETag("*")` on the `createItem` options. Cosmos DB rejects the write with HTTP 409 Conflict if a document with the same `id` in the same partition already exists, making duplicate detection atomic and free of an extra read.
+
+**Incorrect (upsert silently overwrites existing records):**
+
+```java
+// ❌ upsertItem overwrites an existing user-credentials document silently
+// A duplicate email gets no error — the old credentials are lost
+container.upsertItem(credentialsDto, new PartitionKey(email), null).block();
+```
+
+**Correct (conditional create — 409 on duplicate):**
+
+```java
+// ✅ createItem with IfNoneMatchETag("*") rejects if the document already exists
+CosmosItemRequestOptions options = new CosmosItemRequestOptions()
+    .setIfNoneMatchETag("*");  // Reject if any document exists with this id+PK
+
+try {
+    credentialsContainer
+        .createItem(credentialsDto, new PartitionKey(email), options)
+        .block();
+} catch (CosmosException ex) {
+    if (ex.getStatusCode() == 409) {
+        // Email already registered — surface as domain error
+        throw new AlreadyExistsException("Email already in use: " + email);
+    }
+    throw ex;
+}
+```
+
+```java
+// ✅ Reactive chain
+credentialsContainer
+    .createItem(credentialsDto, new PartitionKey(email),
+        new CosmosItemRequestOptions().setIfNoneMatchETag("*"))
+    .onErrorMap(CosmosException.class, ex ->
+        ex.getStatusCode() == 409
+            ? new AlreadyExistsException("Email already in use")
+            : ex);
+```
+
+**Why `"*"` (wildcard):** In HTTP `If-None-Match: *` semantics, `"*"` means "match any existing document". Combined with `createItem` (not `upsertItem`), the server rejects the write if _any_ document with the same `id` and partition key already exists — regardless of its ETag value.
+
+**Key Points:**
+- Use `createItem` + `setIfNoneMatchETag("*")`, never `upsertItem`, when uniqueness is a domain invariant
+- The 409 check is done atomically server-side — no extra read RU consumed
+- Gated on the document's `id` field + partition key (not arbitrary field values)
+- Particularly critical for email-keyed credential stores and idempotent API endpoints
+
+Reference: [Optimistic concurrency in Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/database-transactions-optimistic-concurrency)
+
+### 4.5 Use Direct Connection Mode for Production
 
 **Impact: HIGH** (reduces latency by 30-50%)
 
@@ -3002,7 +3945,73 @@ Required firewall ports for Direct mode:
 
 Reference: [Direct vs Gateway connection modes](https://learn.microsoft.com/azure/cosmos-db/nosql/sdk-connection-modes)
 
-### 4.5 Log Diagnostics for Troubleshooting
+### 4.6 Guard against empty continuation tokens before calling byPage
+
+**Impact: HIGH** (empty string token causes runtime "INVALID JSON in continuation token" error; null is the correct sentinel for first-page requests)
+
+## Guard Against Empty Continuation Tokens Before Calling byPage
+
+**Impact: HIGH (empty string token causes runtime `INVALID JSON in continuation token` error; `null` is the correct sentinel for first-page requests)**
+
+When integrating Cosmos DB pagination with frameworks that use empty strings as default values for "no token" (e.g., gRPC/proto3, where string fields default to `""`), passing `""` to `byPage(continuationToken, pageSize)` triggers a server-side parse error. The correct sentinel for "no paging state" is `null`.
+
+**Incorrect (empty string passed as continuation token):**
+
+```java
+// ❌ gRPC/proto3: string fields default to "" — NOT null
+String pagingState = request.getPagingState();  // returns "" on first call
+
+// Passing "" to byPage causes:
+// CosmosException: INVALID JSON in continuation token
+return container.queryItems(querySpec, opts, Video.class)
+    .byPage(pagingState, pageSize)          // ❌ "" is not a valid token
+    .next()
+    .toFuture();
+```
+
+**Correct (null-guard before passing to byPage):**
+
+```java
+// ✅ Convert empty string to null before passing as continuation token
+String raw = request.getPagingState();     // "" on first call, token on subsequent calls
+String continuationToken = (raw == null || raw.isEmpty()) ? null : raw;
+
+return container.queryItems(querySpec, opts, Video.class)
+    .byPage(continuationToken, pageSize)   // ✅ null = first page, token = continuation
+    .next()
+    .map(page -> new ResultListPage<>(page.getResults(), page.getContinuationToken()))
+    .switchIfEmpty(Mono.just(new ResultListPage<>()))
+    .toFuture();
+```
+
+```java
+// ✅ Or with Optional pattern
+Optional<String> pageState = Optional.ofNullable(
+    raw == null || raw.isEmpty() ? null : raw);
+
+return container.queryItems(querySpec, opts, Video.class)
+    .byPage(pageState.orElse(null), pageSize)
+    .next()
+    .toFuture();
+```
+
+**General pattern for any pagination layer:**
+
+| Input value | Meaning | Pass to byPage as |
+|-------------|---------|------------------|
+| `null` | First page | `null` |
+| `""` (empty string) | First page (proto3/gRPC default) | `null` |
+| `"eyJ..."` (token) | Continuation | Pass as-is |
+
+**Key Points:**
+- `byPage(String continuationToken, int pageSize)` — `continuationToken` must be `null` for the first page request, never `""`
+- This issue appears in any integration where the paging state field has a non-null empty default: gRPC/proto3 strings, Jackson deserialization of missing JSON fields, HTTP query parameters
+- `page.getContinuationToken()` returns `null` when there are no more pages — map `null` back to `""` when sending to clients that expect non-null strings (e.g., proto3 response fields)
+- `switchIfEmpty(Mono.just(new ResultListPage<>()))` handles the case where the query matches zero documents and `byPage(...).next()` emits nothing
+
+Reference: [Query with continuation tokens (Java SDK)](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-java-get-started)
+
+### 4.7 Log Diagnostics for Troubleshooting
 
 **Impact: MEDIUM** (enables root cause analysis)
 
@@ -3122,7 +4131,7 @@ Key diagnostic fields:
 
 Reference: [Capture diagnostics](https://learn.microsoft.com/azure/cosmos-db/nosql/troubleshoot-dotnet-sdk)
 
-### 4.6 Configure SSL and connection mode for Cosmos DB Emulator
+### 4.8 Configure SSL and connection mode for Cosmos DB Emulator
 
 **Impact: MEDIUM** (enables local development with all SDKs)
 
@@ -3333,7 +4342,7 @@ System.setProperty("COSMOS.EMULATOR_SSL_TRUST_ALL", "true");  // INEFFECTIVE!
 
 Reference: [Use the Azure Cosmos DB Emulator for local development](https://learn.microsoft.com/azure/cosmos-db/emulator)
 
-### 4.7 Use ETags for optimistic concurrency on read-modify-write operations
+### 4.9 Use ETags for optimistic concurrency on read-modify-write operations
 
 **Impact: HIGH** (prevents lost updates in concurrent write scenarios)
 
@@ -3534,7 +4543,7 @@ public void updateProjectTaskCounts(String tenantId, String projectId) {
 
 Reference: [Optimistic concurrency control in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/database-transactions-optimistic-concurrency#optimistic-concurrency-control)
 
-### 4.8 Configure Excluded Regions for Dynamic Failover
+### 4.10 Configure Excluded Regions for Dynamic Failover
 
 **Impact: MEDIUM** (enables dynamic routing control without code changes)
 
@@ -3678,7 +4687,7 @@ var outageOptions = new ItemRequestOptions
 Reference: [Performance tips - .NET SDK Excluded Regions](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-dotnet-sdk-v3#excluded-regions)
 Reference: [Performance tips - Java SDK Excluded Regions](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-java-sdk-v4#excluded-regions)
 
-### 4.9 Unwrap CosmosItemResponse and enable content response in Java SDK
+### 4.11 Unwrap CosmosItemResponse and enable content response in Java SDK
 
 **Impact: MEDIUM** (prevents type errors from missing getItem() on reads and null content on writes)
 
@@ -3884,7 +4893,7 @@ Enabling content response does NOT increase RU cost - the document is already fe
 
 Reference: [Azure Cosmos DB Java SDK best practices](https://learn.microsoft.com/azure/cosmos-db/nosql/best-practice-java)
 
-### 4.10 Use dependent @Bean methods for Cosmos DB initialization in Spring Boot
+### 4.12 Use dependent @Bean methods for Cosmos DB initialization in Spring Boot
 
 **Impact: HIGH** (prevents circular dependency, startup failures, class name collisions, and compile errors)
 
@@ -4127,12 +5136,25 @@ public class CosmosDbConfig extends AbstractCosmosConfiguration {
 - Always call `createDatabaseIfNotExists()` before `createContainerIfNotExists()`
 - When extending `AbstractCosmosConfiguration`, use `@Bean` (not `@Override`) on `cosmosClientBuilder()`
 
+**Global Jackson fallback for Cosmos system metadata:**
+
+When entity classes miss `@JsonIgnoreProperties(ignoreUnknown = true)`, reads can fail with `UnrecognizedPropertyException` on Cosmos system fields (for example `_rid`, `_self`, `_etag`, `_ts`). Add a global fallback in Spring Boot:
+
+```yaml
+spring:
+    jackson:
+        deserialization:
+            fail-on-unknown-properties: false
+```
+
+This is a defense-in-depth safety net and does not replace correct entity annotations.
+
 References:
 - [Spring Framework @Bean documentation](https://docs.spring.io/spring-framework/reference/core/beans/java/bean-annotation.html)
 - [`CosmosAsyncClient.createDatabaseIfNotExists()` Javadoc](https://learn.microsoft.com/java/api/com.azure.cosmos.cosmosasyncclient?view=azure-java-stable)
 - [`AbstractCosmosConfiguration` Javadoc](https://learn.microsoft.com/java/api/com.azure.spring.data.cosmos.config.abstractcosmosconfiguration?view=azure-java-stable)
 
-### 4.11 Spring Boot and Java version compatibility for Cosmos DB SDK
+### 4.13 Spring Boot and Java version compatibility for Cosmos DB SDK
 
 **Impact: CRITICAL** (Prevents build failures due to version incompatibility between Spring Boot and Java)
 
@@ -4263,7 +5285,7 @@ export PATH=$JAVA_HOME/bin:$PATH
 - [Spring Boot 2.7.x System Requirements](https://docs.spring.io/spring-boot/docs/2.7.x/reference/html/getting-started.html#getting-started-system-requirements)
 - [Azure Cosmos DB Java SDK](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/sdk-java-v4)
 
-### 4.12 Configure local development environment to avoid cloud connection conflicts
+### 4.14 Configure local development environment to avoid cloud connection conflicts
 
 **Impact: MEDIUM** (prevents accidental connections to production instead of emulator)
 
@@ -4434,7 +5456,7 @@ azure:
 
 Reference: [Azure Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/emulator)
 
-### 4.13 Explicitly reference Newtonsoft.Json package
+### 4.15 Explicitly reference Newtonsoft.Json package
 
 **Impact: MEDIUM** (Prevents build failures and security vulnerabilities from missing or outdated Newtonsoft.Json dependency)
 
@@ -4536,7 +5558,78 @@ Solution:
 
 Reference: [Managing Newtonsoft.Json Dependencies](https://learn.microsoft.com/en-us/azure/cosmos-db/performance-tips-dotnet-sdk-v3?tabs=trace-net-core#managing-newtonsoftjson-dependencies)
 
-### 4.14 Configure Preferred Regions for Availability
+### 4.16 Use the Patch API for atomic counter increments
+
+**Impact: HIGH** (eliminates read-modify-write for counters; reduces RU cost and eliminates concurrency conflicts)
+
+## Use the Patch API for Atomic Counter Increments
+
+**Impact: HIGH (eliminates read-modify-write for counters; reduces RU cost and eliminates concurrency conflicts)**
+
+For fields that act as counters (view counts, rating totals, like counts), `patchItem` with `CosmosPatchOperations.incr()` performs a server-side atomic increment without a prior read. This is cheaper (no read RU), faster, and free of the ETag conflict/retry cycle.
+
+**Incorrect (read-modify-write for counters):**
+
+```java
+// ❌ Read-modify-write: 1 read RU + 1 write RU, subject to ETag conflicts at scale
+CosmosItemResponse<Video> resp = container.readItem(videoId,
+    new PartitionKey(videoId), Video.class).block();
+Video video = resp.getItem();
+video.setViews(video.getViews() + 1);
+container.upsertItem(video, new PartitionKey(videoId), null).block();
+```
+
+**Correct (Patch API — server-side atomic increment):**
+
+```java
+// ✅ Atomic increment — no read required, no ETag conflict possible
+CosmosPatchOperations ops = CosmosPatchOperations.create()
+    .increment("/views", 1);      // Atomic add, server-side
+
+container.patchItem(
+    videoId,
+    new PartitionKey(videoId),
+    ops,
+    Video.class
+).block();
+```
+
+```java
+// ✅ Patch multiple counters in one round-trip (e.g., rate-video: two fields)
+CosmosPatchOperations ratingOps = CosmosPatchOperations.create()
+    .increment("/ratingsCount", 1)
+    .increment("/ratingsTotal", ratingValue);
+
+videosContainer.patchItem(
+    videoId, new PartitionKey(videoId), ratingOps, Video.class).block();
+```
+
+```java
+// ✅ Async / reactive
+CosmosPatchOperations ops = CosmosPatchOperations.create().increment("/views", 1);
+
+return container.patchItem(videoId, new PartitionKey(videoId), ops, Video.class)
+    .then();  // Mono<Void> — caller doesn't need the updated document
+```
+
+**Patch operations supported:**
+- `incr(path, value)` — numeric increment (positive or negative)
+- `set(path, value)` — set a field to a new value
+- `add(path, value)` — add to an array or set a field
+- `remove(path)` — remove a field
+- `replace(path, value)` — replace an existing field (fails if absent)
+- `move(from, to)` — rename a field
+
+**Key Points:**
+- `incr()` requires the field to already exist as a numeric type in the document; initialize it to `0` on document creation
+- At most 10 patch operations per `patchItem` call
+- Patch is idempotent for `set`/`replace` but **not** for `incr` — a retried increment will double-count. Use conditional patch (`setFilterPredicate`) or accept the retry risk for high-volume counters
+- RU cost: ~1 write RU (same as a regular write), no read RU
+- Prefer Patch over Stored Procedures for simple counter increments — Patch is natively supported without custom server-side code
+
+Reference: [Partial document update (Patch API)](https://learn.microsoft.com/azure/cosmos-db/partial-document-update)
+
+### 4.17 Configure Preferred Regions for Availability
 
 **Impact: HIGH** (enables automatic failover, reduces latency)
 
@@ -4632,7 +5725,7 @@ Best practices:
 
 Reference: [Configure preferred regions](https://learn.microsoft.com/azure/cosmos-db/nosql/tutorial-global-distribution)
 
-### 4.15 Include aiohttp When Using Python Async SDK
+### 4.18 Include aiohttp When Using Python Async SDK
 
 **Impact: HIGH** (prevents application startup failure)
 
@@ -4680,7 +5773,66 @@ from azure.cosmos import CosmosClient
 
 Reference: [Azure Cosmos DB Python SDK](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/sdk-python)
 
-### 4.16 Handle 429 Errors with Retry-After
+### 4.19 Never share a single CosmosItemRequestOptions instance across multiple createItem calls
+
+**Impact: HIGH** (causes wrong partition key to be sent, producing silent data corruption or 400/404 errors)
+
+## Never Share a Single CosmosItemRequestOptions Instance Across Multiple createItem Calls
+
+**Impact: HIGH (causes wrong partition key to be sent, producing silent data corruption or 400/404 errors)**
+
+`CosmosItemRequestOptions` is a mutable object. The SDK may mutate the options object internally during request preparation (e.g., stamping the resolved partition key). Reusing the same instance across two `createItem` calls causes the second call to inherit state from the first, resulting in an incorrect partition key being sent to the service.
+
+**Incorrect (shared mutable options — second call sends wrong partition key):**
+
+```java
+// ❌ Anti-pattern: one options instance reused for two different createItem calls
+CosmosItemRequestOptions options = new CosmosItemRequestOptions()
+    .setIfNoneMatchETag("*");
+
+// First call: writes UserCredentials with PK = email
+credentialsContainer.createItem(credentials, new PartitionKey(email), options).block();
+
+// Second call: SDK re-uses the mutated options — may send PK = email (WRONG)
+// instead of PK = userId, causing misrouted write or silent corruption
+usersContainer.createItem(userProfile, new PartitionKey(userId), options).block();
+```
+
+**Correct (separate instance per call):**
+
+```java
+// ✅ Each createItem gets its own fresh options instance
+CosmosItemRequestOptions credsOptions = new CosmosItemRequestOptions()
+    .setIfNoneMatchETag("*");
+CosmosItemRequestOptions userOptions = new CosmosItemRequestOptions()
+    .setIfNoneMatchETag("*");
+
+credentialsContainer
+    .createItem(credentials, new PartitionKey(email), credsOptions).block();
+usersContainer
+    .createItem(userProfile, new PartitionKey(userId), userOptions).block();
+```
+
+```java
+// ✅ Or construct inline to make sharing structurally impossible
+credentialsContainer.createItem(
+    credentials, new PartitionKey(email),
+    new CosmosItemRequestOptions().setIfNoneMatchETag("*")).block();
+
+usersContainer.createItem(
+    userProfile, new PartitionKey(userId),
+    new CosmosItemRequestOptions().setIfNoneMatchETag("*")).block();
+```
+
+**Key Points:**
+- `CosmosItemRequestOptions` is **not thread-safe and not reuse-safe** across different requests
+- The bug is especially insidious because: (a) the first call succeeds, (b) the second call may also succeed but route to the wrong partition, (c) the document appears at the wrong partition key value, breaking point reads
+- The same rule applies to `CosmosQueryRequestOptions` and `CosmosPatchItemRequestOptions`
+- Prefer inline construction (`new CosmosItemRequestOptions()...`) to make accidental sharing impossible by inspection
+
+Reference: [Java SDK createItem](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-java-get-started)
+
+### 4.20 Handle 429 Errors with Retry-After
 
 **Impact: HIGH** (prevents cascading failures)
 
@@ -4797,7 +5949,7 @@ await Task.WhenAll(tasks);
 
 Reference: [Handle rate limiting](https://learn.microsoft.com/azure/cosmos-db/nosql/troubleshoot-request-rate-too-large)
 
-### 4.17 Use consistent enum serialization between Cosmos SDK and application layer
+### 4.21 Use consistent enum serialization between Cosmos SDK and application layer
 
 **Impact: critical** (undefined)
 
@@ -4894,7 +6046,7 @@ public class Order
 - Point reads work but filtered queries don't
 - API returns different enum format than stored in Cosmos DB
 
-### 4.18 Reuse CosmosClient as Singleton
+### 4.22 Reuse CosmosClient as Singleton
 
 **Impact: CRITICAL** (prevents connection exhaustion)
 
@@ -5015,7 +6167,7 @@ public class CosmosDbHostedService : IHostedService
 
 Reference: [CosmosClient best practices](https://learn.microsoft.com/azure/cosmos-db/nosql/best-practice-dotnet)
 
-### 4.19 Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs
+### 4.23 Annotate entities for Spring Data Cosmos with @Container, @PartitionKey, and String IDs
 
 **Impact: CRITICAL** (prevents startup failures and data access errors in Spring Data Cosmos applications)
 
@@ -5050,8 +6202,10 @@ public class Owner {
 import com.azure.spring.data.cosmos.core.mapping.Container;
 import com.azure.spring.data.cosmos.core.mapping.PartitionKey;
 import com.azure.spring.data.cosmos.core.mapping.GeneratedValue;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Container(containerName = "owners")
 public class Owner {
 
@@ -5070,6 +6224,8 @@ public class Owner {
     }
 }
 ```
+
+Add `@JsonIgnoreProperties(ignoreUnknown = true)` to every Cosmos entity class so deserialization ignores Cosmos DB system metadata (`_rid`, `_self`, `_etag`, `_ts`, `_lsn`). This reinforces the serialization safety guidance from `model-json-serialization` at the point where entities are usually generated.
 
 **Key annotation mappings:**
 
@@ -5127,7 +6283,7 @@ public class Owner {
 
 Reference: [Spring Data Azure Cosmos DB annotations](https://learn.microsoft.com/azure/cosmos-db/nosql/how-to-java-spring-data)
 
-### 4.20 Use CosmosRepository correctly and handle Iterable return types
+### 4.24 Use CosmosRepository correctly and handle Iterable return types
 
 **Impact: HIGH** (prevents ClassCastException and query failures in Spring Data Cosmos repositories)
 
@@ -5319,6 +6475,10 @@ Reference: [Composite index sort order](https://learn.microsoft.com/azure/cosmos
 
 Create composite indexes for queries with ORDER BY on multiple properties. Without them, queries may fail or require expensive client-side sorting.
 
+The default indexing policy indexes every property but does **not** create composite indexes. Any query that combines a `WHERE` equality filter with `ORDER BY` on a different field needs a composite index declared explicitly, or the query will either fail in production or require expensive client-side sorting.
+
+> **Emulator warning:** The Cosmos DB emulator silently permits `ORDER BY` queries without a matching composite index and returns identical RU charges. Production containers reject the same query with *"The order by query does not have a corresponding composite index that it can be served from."* Always declare composite indexes at container-create time — do not rely on emulator success as validation.
+
 **Incorrect (ORDER BY without composite index):**
 
 ```csharp
@@ -5474,11 +6634,76 @@ policy.setCompositeIndexes(Arrays.asList(statusSort, assigneeSort));
 **Why type discriminators need composite indexes:**
 When a single container holds multiple entity types (tenant, user, project, task), queries always filter by `type`. Without a composite index on `(type, sortField)`, the query engine cannot efficiently sort within a single entity type. This is especially costly in containers with millions of mixed-type documents.
 
+### Node.js / TypeScript (@azure/cosmos v4)
+
+**Incorrect (container created with default indexing policy — no composites):**
+
+```typescript
+// ❌ No indexingPolicy → default (indexes everything, no composite)
+await database.containers.createIfNotExists({
+  id: 'orders',
+  partitionKey: { paths: ['/userId'] },
+});
+
+// This query works on the emulator but FAILS in production:
+await container.items.query({
+  query: 'SELECT * FROM c WHERE c.userId = @u ORDER BY c.createdAt DESC',
+  parameters: [{ name: '@u', value: userId }],
+}, { partitionKey: userId }).fetchAll();
+```
+
+**Correct (composite indexes declared at container creation):**
+
+```typescript
+import { IndexingPolicy } from '@azure/cosmos';
+
+// ✅ Declare composite indexes alongside container creation
+const ordersIndexingPolicy: IndexingPolicy = {
+  indexingMode: 'consistent',
+  automatic: true,
+  includedPaths: [{ path: '/*' }],
+  excludedPaths: [{ path: '/"_etag"/?' }],
+  compositeIndexes: [
+    // WHERE c.userId = @u ORDER BY c.createdAt DESC
+    [
+      { path: '/userId', order: 'ascending' },
+      { path: '/createdAt', order: 'descending' },
+    ],
+    // WHERE c.userId = @u AND c.status = @s ORDER BY c.createdAt DESC
+    [
+      { path: '/userId', order: 'ascending' },
+      { path: '/status', order: 'ascending' },
+      { path: '/createdAt', order: 'descending' },
+    ],
+  ],
+};
+
+await database.containers.createIfNotExists({
+  id: 'orders',
+  partitionKey: { paths: ['/userId'] },
+  indexingPolicy: ordersIndexingPolicy,
+});
+```
+
+**Updating an existing container's indexing policy:**
+
+```typescript
+// Replace indexing policy on an existing container
+const { resource: existing } = await database.container('orders').read();
+await database.container('orders').replace({
+  id: 'orders',
+  partitionKey: existing!.partitionKey,
+  indexingPolicy: ordersIndexingPolicy,
+});
+// Indexing is rebuilt in the background; monitor indexTransformationProgress
+```
+
 Rules:
 - Composite index order must match ORDER BY exactly
 - First path can be equality filter
 - Include both ASC/DESC variants for flexibility
 - Maximum 8 paths per composite index
+- Composite indexes consume additional write RU — declare only the composites you actually query against
 - **Always** define composite indexes when using type discriminators in shared containers
 - Include `/type` as the first path in multi-tenant composite indexes
 
@@ -6051,6 +7276,42 @@ await container.ReplaceThroughputAsync(
 // Now scales between 2,000-20,000 RU/s
 ```
 
+```python
+from azure.cosmos import PartitionKey, ThroughputProperties
+
+# Incorrect: fixed throughput for variable workload
+container = await database.create_container_if_not_exists(
+    id="orders",
+    partition_key=PartitionKey(path="/customerId"),
+    offer_throughput=10000,  # Fixed 10,000 RU/s, not autoscale
+)
+
+# Correct: autoscale throughput for variable workload
+container = await database.create_container_if_not_exists(
+    id="orders-autoscale",
+    partition_key=PartitionKey(path="/customerId"),
+    offer_throughput=ThroughputProperties(
+        auto_scale_max_throughput=10000,
+    ),
+)
+# Scales automatically between 1,000-10,000 RU/s
+```
+
+```python
+from azure.cosmos import ThroughputProperties
+
+# Read current throughput settings
+throughput = await container.get_throughput()
+print(f"Manual throughput: {throughput.offer_throughput}")
+print(f"Autoscale max: {throughput.auto_scale_max_throughput}")
+
+# Update autoscale max throughput
+await container.replace_throughput(
+    ThroughputProperties(auto_scale_max_throughput=20000)
+)
+# Now scales between 2,000-20,000 RU/s
+```
+
 Cost comparison example:
 - Fixed 10,000 RU/s: ~$584/month (always)
 - Autoscale 10,000 max: $58-$584/month (based on usage)
@@ -6066,7 +7327,7 @@ When to use fixed:
 - Steady, predictable workloads (utilization > 66%)
 - Cost-sensitive workloads with known patterns
 
-Reference: [Autoscale throughput](https://learn.microsoft.com/azure/cosmos-db/provision-throughput-autoscale)
+Reference: [Autoscale throughput](https://learn.microsoft.com/en-us/azure/cosmos-db/provision-throughput-autoscale)
 
 ### 6.2 Understand Burst Capacity
 
@@ -7732,6 +8993,86 @@ var client = new CosmosClient(connectionString, new CosmosClientOptions
 });
 ```
 
+### Node.js / TypeScript (@azure/cosmos v4)
+
+Every `@azure/cosmos` operation exposes `requestCharge` as a top-level numeric property on the response. Capture it on every call — point reads, queries, writes, and bulk operations.
+
+**Incorrect (discarding requestCharge — no visibility into cost):**
+
+```typescript
+// ❌ requestCharge available but never captured
+const { resource } = await container.item(orderId, userId).read();
+return resource;
+// Is this costing 1 RU or 100 RU? Unknown!
+```
+
+**Correct (capturing requestCharge on reads and writes):**
+
+```typescript
+import { Container, FeedResponse } from '@azure/cosmos';
+
+// ✅ Point read — capture requestCharge
+export async function getOrder(container: Container, id: string, userId: string) {
+  const response = await container.item(id, userId).read();
+  logger.debug({
+    op: 'ReadItem',
+    container: container.id,
+    ru: response.requestCharge,
+    statusCode: response.statusCode,
+    activityId: response.activityId,
+  }, 'cosmos.readItem');
+  return response.resource;
+}
+
+// ✅ Write — create/upsert/replace/patch/delete all expose requestCharge
+export async function createOrder(container: Container, order: Order) {
+  const response = await container.items.create(order);
+  logger.debug({ op: 'CreateItem', ru: response.requestCharge }, 'cosmos.createItem');
+  return response.resource;
+}
+```
+
+**Correct (accumulating RU across query pages — single-page tracking undercounts paged results):**
+
+```typescript
+// ✅ Query — sum requestCharge across all pages
+export async function getCustomerOrders(container: Container, userId: string) {
+  const iterator = container.items.query<OrderSummary>({
+    query: 'SELECT c.id, c.userId, c.status, c.total, c.createdAt FROM c WHERE c.userId = @u ORDER BY c.createdAt DESC',
+    parameters: [{ name: '@u', value: userId }],
+  }, { partitionKey: userId });
+
+  const results: OrderSummary[] = [];
+  let totalRU = 0;
+
+  while (iterator.hasMoreResults()) {
+    const page: FeedResponse<OrderSummary> = await iterator.fetchNext();
+    results.push(...page.resources);
+    totalRU += page.requestCharge;
+  }
+
+  logger.info({ op: 'Query', container: container.id, count: results.length, totalRU }, 'cosmos.query.total');
+  if (totalRU > 100) {
+    logger.warn({ totalRU, count: results.length }, 'cosmos.query.expensive');
+  }
+  return results;
+}
+```
+
+**`requestCharge` API surface in `@azure/cosmos` v4:**
+
+| Operation | Response type | RU property |
+|-----------|---------------|-------------|
+| `container.item(id, pk).read()` | `ItemResponse<T>` | `response.requestCharge` |
+| `container.items.create(doc)` | `ItemResponse<T>` | `response.requestCharge` |
+| `container.items.upsert(doc)` | `ItemResponse<T>` | `response.requestCharge` |
+| `container.item(id, pk).replace(doc)` | `ItemResponse<T>` | `response.requestCharge` |
+| `container.item(id, pk).patch(ops)` | `ItemResponse<T>` | `response.requestCharge` |
+| `container.item(id, pk).delete()` | `ItemResponse<T>` | `response.requestCharge` |
+| `container.items.query(...).fetchAll()` | `FeedResponse<T>` | `response.requestCharge` |
+| `container.items.query(...).fetchNext()` | `FeedResponse<T>` per page | sum across pages |
+| `container.items.bulk(ops)` | `OperationResponse[]` | `op.requestCharge` per operation |
+
 Azure Monitor queries for RU analysis:
 ```kusto
 // Top expensive operations
@@ -8480,6 +9821,1332 @@ private void populateRelationships(Vet vet) {
 For truly high-volume scenarios, consider denormalizing the data instead (see `model-denormalize-reads`) or using Change Feed to maintain materialized views (see `pattern-change-feed-materialized-views`).
 
 Reference: [Data modeling in Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/nosql/modeling-data)
+
+### 9.4 Use Point Reads for AI-Grounding and RAG Retrieval When ID Is Known
+
+**Impact: HIGH** (1 RU point read vs ~2.5+ RU query per grounding fetch; reduces tool-call latency in LLM loops)
+
+## Use Point Reads for AI-Grounding and RAG Retrieval When ID Is Known
+
+In AI-grounded workloads an LLM tool-use loop typically resolves a concrete entity id (e.g., `orderId`, `sessionId`, `documentId`) from the user turn or tool-call arguments, then fetches the full document from Cosmos DB to build the grounding context for the model. Because the id and partition key are both known at call time, a point read should always be used instead of a query. This applies to any retrieval step that feeds data into an LLM context window — RAG retrieval, tool-call handlers, grounding functions, or agent data-fetching steps.
+
+**How to recognize this pattern — static tell-tales:**
+
+- An LLM / AI client import in the same module (e.g., `OpenAI`, `AzureOpenAI`, `ChatCompletionClient`, Semantic Kernel, LangChain)
+- A function that parses tool-call arguments or assembles a `messages` array
+- A Cosmos DB call using a single-id equality filter where the id was extracted from user input or a tool-call response
+
+**Incorrect (query when id and partition key are both available from the tool call):**
+
+```typescript
+// ❌ Generic query — id is already known from the user turn / tool call
+export async function groundOrderContext(orderId: string, userId: string) {
+  const { resources: orders } = await ordersContainer.items
+    .query<Order>({
+      query: "SELECT * FROM c WHERE c.orderId = @o",
+      parameters: [{ name: "@o", value: orderId }],
+    })
+    .fetchAll();
+
+  const { resources: events } = await eventsContainer.items
+    .query<DeliveryEvent>({
+      query: "SELECT * FROM c WHERE c.orderId = @o ORDER BY c.timestamp DESC",
+      parameters: [{ name: "@o", value: orderId }],
+    })
+    .fetchAll();
+
+  return buildGroundingContext(orders[0], events);
+}
+```
+
+```python
+# ❌ Query instead of point read — id and partition key both known
+def ground_order_context(order_id: str, user_id: str):
+    orders = list(orders_container.query_items(
+        query="SELECT * FROM c WHERE c.id = @id",
+        parameters=[{"name": "@id", "value": order_id}],
+        partition_key=user_id,
+    ))
+    return build_grounding_context(orders[0]) if orders else None
+```
+
+**Correct (point read for the primary document, partition-scoped projection for related items):**
+
+```typescript
+// ✅ Point read for the order (id + partition key both known from tool call)
+export async function groundOrderContext(orderId: string, userId: string) {
+  const orderResp = await ordersContainer.item(orderId, userId).read<Order>();
+  const order = orderResp.resource;
+  if (!order) return null;
+
+  // ✅ Partition-key-scoped projection for related event list
+  const { resources: events } = await eventsContainer.items
+    .query<DeliveryEvent>(
+      {
+        query:
+          "SELECT c.id, c.orderId, c.timestamp, c.status, c.note FROM c WHERE c.orderId = @o ORDER BY c.timestamp DESC",
+        parameters: [{ name: "@o", value: orderId }],
+      },
+      { partitionKey: orderId }
+    )
+    .fetchAll();
+
+  return buildGroundingContext(order, events);
+}
+```
+
+```python
+# ✅ Point read — 1 RU, no query engine overhead
+def ground_order_context(order_id: str, user_id: str):
+    order = orders_container.read_item(item=order_id, partition_key=user_id)
+    return build_grounding_context(order)
+```
+
+**Why this matters for AI workloads:**
+
+1. **Latency-sensitive** — each tool call adds to perceived LLM response time; a point read (1 RU, single backend hop) is the fastest possible retrieval
+2. **Throughput-sensitive** — hot conversations drive the same partition key repeatedly; cross-partition fan-out under load hot-spots a single logical partition fastest
+3. **ID is known by construction** — the LLM tool-use loop hands the agent an id parsed from the user turn or a prior tool result; agents should recognise this signal and reach for the point read
+
+See also: `query-point-reads` (general point-read guidance), `query-use-projections` (select only needed fields), `query-avoid-cross-partition` (avoid cross-partition fan-out).
+
+Reference: [Request Units — point reads cost fewer RUs than queries](https://learn.microsoft.com/azure/cosmos-db/request-units#request-unit-considerations)
+
+---
+
+## 10. Developer Tooling
+
+**Impact: MEDIUM**
+
+### 10.1 Use Azure Cosmos DB Emulator for local development and testing
+
+**Impact: MEDIUM** (prevents accidental cloud usage and speeds up local iteration)
+
+## Use Azure Cosmos DB Emulator for Local Development and Testing
+
+Prefer the Azure Cosmos DB Emulator for local development, exploratory testing, and repeatable developer workflows. It avoids cloud cost during local work, keeps feedback loops fast, and reduces the risk of accidentally using shared or production resources while iterating.
+
+**Incorrect (local development against cloud resources by default):**
+
+```yaml
+# Local development profile
+azure:
+  cosmos:
+    endpoint: https://my-prod-account.documents.azure.com:443/
+    key: ${COSMOS_KEY}
+```
+
+**Correct (default local development to the emulator):**
+
+```yaml
+# Local development profile
+azure:
+  cosmos:
+    endpoint: https://localhost:8081/
+    key: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==
+```
+
+Run the emulator locally or in Docker, and keep production endpoints in environment-specific profiles or deployment configuration. For SDK-specific SSL and gateway-mode details, also apply the linked emulator configuration rules.
+
+Related rules:
+- `sdk-emulator-ssl`
+- `sdk-local-dev-config`
+
+Reference: [Use the Azure Cosmos DB Emulator for local development](https://learn.microsoft.com/azure/cosmos-db/emulator)
+
+### 10.2 Use Azure Cosmos DB VS Code extension for routine inspection and management
+
+**Impact: MEDIUM** (speeds up data inspection and reduces one-off scripts for routine tasks)
+
+## Use Azure Cosmos DB VS Code Extension for Routine Inspection and Management
+
+For day-to-day inspection tasks, prefer the Azure Cosmos DB VS Code extension over ad hoc scripts or direct SDK calls. The extension is faster for browsing accounts, querying containers, inspecting items, and validating local-versus-cloud data without introducing disposable code into the repository.
+
+**Incorrect (writing one-off code for routine inspection):**
+
+```bash
+# Need to inspect a few items or verify a container layout
+# Result: write a throwaway script just to browse data
+node inspect-cosmos.js
+python list_items.py
+```
+
+**Correct (use the extension for routine inspection first):**
+
+```text
+1. Install the Azure Cosmos DB VS Code extension:
+   ms-azuretools.vscode-cosmosdb
+2. Use the extension to connect to the target account or emulator.
+3. Browse databases, containers, and items directly in VS Code.
+4. Run exploratory queries there before deciding whether permanent code is needed.
+```
+
+Use code only when the task is repeatable, automated, or belongs in the product. For one-off inspection, prefer the tool built for inspection.
+
+Reference: [Azure Cosmos DB extension for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-cosmosdb)
+
+---
+
+## 11. Vector Search
+
+**Impact: HIGH**
+
+### 11.1 Use VectorDistance for Similarity Search
+
+**Impact: HIGH** (Enables semantic search and RAG patterns)
+
+## Use VectorDistance for Similarity Search
+
+**Impact: HIGH (Enables semantic search and RAG patterns)**
+
+Use the VectorDistance() system function to perform vector similarity searches. This function computes the distance between a query vector and stored vectors using the distance function specified in the vector embedding policy.
+
+**Query Pattern:**
+```sql
+SELECT TOP N c.property, VectorDistance(c.vectorPath, @embedding) AS SimilarityScore
+FROM c
+ORDER BY VectorDistance(c.vectorPath, @embedding)
+```
+
+**Incorrect (missing ORDER BY or parameterization):**
+
+```csharp
+// .NET - Not parameterized, no ORDER BY
+var query = "SELECT c.title FROM c WHERE VectorDistance(c.embedding, [0.1, 0.2, ...]) < 0.5";
+// Issues: 
+// 1. Hard-coded embedding array (query plan cache misses)
+// 2. No ORDER BY (doesn't return most similar first)
+// 3. Using WHERE instead of ORDER BY (less efficient)
+```
+
+```python
+# Python - Missing TOP/LIMIT
+query = "SELECT c.title, VectorDistance(c.embedding, @embedding) AS score FROM c"
+# Missing ORDER BY and TOP - returns all items unsorted
+```
+
+**Correct (parameterized with ORDER BY):**
+
+```csharp
+// .NET - SDK 3.45.0+
+float[] queryEmbedding = await GetEmbeddingAsync("search query");
+
+var queryDef = new QueryDefinition(
+    query: "SELECT TOP 10 c.title, VectorDistance(c.embedding, @embedding) AS SimilarityScore " +
+           "FROM c ORDER BY VectorDistance(c.embedding, @embedding)"
+).WithParameter("@embedding", queryEmbedding);
+
+using FeedIterator<SearchResult> feed = container.GetItemQueryIterator<SearchResult>(
+    queryDefinition: queryDef
+);
+
+while (feed.HasMoreResults) 
+{
+    FeedResponse<SearchResult> response = await feed.ReadNextAsync();
+    foreach (var item in response)
+    {
+        Console.WriteLine($"{item.Title}: {item.SimilarityScore}");
+    }
+}
+```
+
+```python
+# Python
+query_embedding = get_embedding("search query")  # Returns list of floats
+
+for item in container.query_items( 
+    query='SELECT TOP 10 c.title, VectorDistance(c.embedding, @embedding) AS SimilarityScore ' +
+          'FROM c ORDER BY VectorDistance(c.embedding, @embedding)', 
+    parameters=[
+        {"name": "@embedding", "value": query_embedding}
+    ], 
+    enable_cross_partition_query=True
+):
+    print(f"{item['title']}: {item['SimilarityScore']}")
+```
+
+```javascript
+// JavaScript - SDK 4.1.0+
+const queryEmbedding = await getEmbedding("search query");
+
+const { resources } = await container.items
+  .query({
+    query: "SELECT TOP 10 c.title, VectorDistance(c.embedding, @embedding) AS SimilarityScore " +
+           "FROM c ORDER BY VectorDistance(c.embedding, @embedding)",
+    parameters: [{ name: "@embedding", value: queryEmbedding }]
+  })
+  .fetchAll();
+
+for (const item of resources) {
+  console.log(`${item.title}: ${item.SimilarityScore}`);
+}
+```
+
+```java
+// Java
+float[] queryEmbedding = getEmbedding("search query");
+
+ArrayList<SqlParameter> paramList = new ArrayList<>();
+paramList.add(new SqlParameter("@embedding", queryEmbedding));
+
+SqlQuerySpec querySpec = new SqlQuerySpec(
+    "SELECT TOP 10 c.title, VectorDistance(c.embedding, @embedding) AS SimilarityScore " +
+    "FROM c ORDER BY VectorDistance(c.embedding, @embedding)", 
+    paramList
+);
+
+CosmosPagedIterable<SearchResult> results = container.queryItems(
+    querySpec, 
+    new CosmosQueryRequestOptions(), 
+    SearchResult.class
+);
+
+for (SearchResult result : results) {
+    System.out.println(result.getTitle() + ": " + result.getSimilarityScore());
+}
+```
+
+**Best Practices:**
+- Always use `@parameters` for embeddings (enables query plan caching)
+- Include `ORDER BY VectorDistance()` to get most similar results first
+- Use `TOP N` to limit results (reduces RU consumption)
+- Consider combining with WHERE clauses for filtered vector search
+- Enable cross-partition queries when partition key is not in WHERE clause
+
+**Hybrid Search Example (Vector + Filters):**
+```sql
+SELECT TOP 10 c.title, VectorDistance(c.embedding, @embedding) AS score
+FROM c
+WHERE c.category = @category AND c.publishYear >= @minYear
+ORDER BY VectorDistance(c.embedding, @embedding)
+```
+
+Reference: [VectorDistance](https://learn.microsoft.com/en-us/cosmos-db/query/vectordistance) | [.NET](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-dotnet-vector-index-query#run-a-vector-similarity-search-query) | [Python](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-python-vector-index-query#run-a-vector-similarity-search-query) | [JavaScript](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-javascript-vector-index-query#run-a-vector-similarity-search-query) | [Java](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-java-vector-index-query#run-a-vector-similarity-search-query)
+
+### 11.2 Define Vector Embedding Policy
+
+**Impact: CRITICAL** (Required for vector search functionality)
+
+## Define Vector Embedding Policy
+
+**Impact: CRITICAL (Required for vector search functionality)**
+
+The vector embedding policy provides essential information to the Azure Cosmos DB query engine about how to handle vector properties in the VectorDistance system functions. This policy is required and cannot be modified after container creation.
+
+**Vector Embedding Policy Properties:**
+- `path`: The property path that contains vectors (e.g., `/embedding`, `/contentVector`)
+- `dataType`: The type of the elements of the vector (default: Float32)
+- `dimensions`: The length of each vector in the path (default: 1536)
+- `distanceFunction`: The metric used to compute distance/similarity (default: Cosine, options: Cosine, DotProduct, Euclidean)
+
+**Incorrect (no vector embedding policy):**
+
+```csharp
+// .NET - Missing vector embedding policy
+var containerProperties = new ContainerProperties("mycontainer", "/partitionKey");
+await database.CreateContainerAsync(containerProperties);
+```
+
+```python
+# Python - Missing vector embedding policy
+container = db.create_container(
+    id="mycontainer",
+    partition_key=PartitionKey(path='/id')
+)
+```
+
+**Correct (with vector embedding policy):**
+
+```csharp
+// .NET - SDK 3.45.0+
+List<Embedding> embeddings = new List<Embedding>()
+{
+    new Embedding()
+    {
+        Path = "/embedding",
+        DataType = VectorDataType.Float32,
+        DistanceFunction = DistanceFunction.Cosine,
+        Dimensions = 1536,
+    }
+};
+
+Collection<Embedding> collection = new Collection<Embedding>(embeddings);
+ContainerProperties properties = new ContainerProperties(
+    id: "documents", 
+    partitionKeyPath: "/category")
+{   
+    VectorEmbeddingPolicy = new(collection)
+};
+```
+
+```python
+# Python
+vector_embedding_policy = { 
+    "vectorEmbeddings": [ 
+        { 
+            "path": "/embedding", 
+            "dataType": "float32", 
+            "distanceFunction": "cosine", 
+            "dimensions": 1536
+        }
+    ]    
+}
+
+container = db.create_container_if_not_exists( 
+    id="documents", 
+    partition_key=PartitionKey(path='/category'), 
+    vector_embedding_policy=vector_embedding_policy
+)
+```
+
+```javascript
+// JavaScript - SDK 4.1.0+
+const vectorEmbeddingPolicy = {
+  vectorEmbeddings: [
+    {
+      path: "/embedding",
+      dataType: VectorEmbeddingDataType.Float32,
+      dimensions: 1536,
+      distanceFunction: VectorEmbeddingDistanceFunction.Cosine,
+    }
+  ],
+};
+
+const { resource: containerdef } = await database.containers.createIfNotExists({
+  id: "documents",
+  partitionKey: { paths: ["/category"] },
+  vectorEmbeddingPolicy: vectorEmbeddingPolicy
+});
+```
+
+```java
+// Java
+CosmosVectorEmbeddingPolicy cosmosVectorEmbeddingPolicy = new CosmosVectorEmbeddingPolicy();
+
+CosmosVectorEmbedding embedding = new CosmosVectorEmbedding();
+embedding.setPath("/embedding");
+embedding.setDataType(CosmosVectorDataType.FLOAT32);
+embedding.setDimensions(1536L);
+embedding.setDistanceFunction(CosmosVectorDistanceFunction.COSINE);
+
+cosmosVectorEmbeddingPolicy.setCosmosVectorEmbeddings(Arrays.asList(embedding));
+
+CosmosContainerProperties containerProperties = new CosmosContainerProperties("documents", "/category");
+containerProperties.setVectorEmbeddingPolicy(cosmosVectorEmbeddingPolicy);
+
+database.createContainer(containerProperties).block();
+```
+
+Reference: [.NET](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-dotnet-vector-index-query) | [Python](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-python-vector-index-query) | [JavaScript](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-javascript-vector-index-query) | [Java](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-java-vector-index-query)
+
+### 11.3 Enable Vector Search Feature on Account
+
+**Impact: CRITICAL** (Required before using vector search)
+
+## Enable Vector Search Feature on Account
+
+**Impact: CRITICAL (Required before using vector search)**
+
+Vector search must be explicitly enabled on the Azure Cosmos DB account before creating containers with vector policies. The feature can be enabled via Azure Portal or Azure CLI. Activation is auto-approved but may take up to 15 minutes to take effect.
+
+**Important Notes:**
+- Must be enabled **before** creating containers with vector policies
+- Only supported on **new containers** (cannot modify existing containers)
+- Feature activation takes up to 15 minutes
+- Vector policies cannot be modified after container creation
+
+**Enable via Azure Portal:**
+
+1. Navigate to Azure Cosmos DB for NoSQL account
+2. Select "Features" under Settings
+3. Select "Vector Search for NoSQL API"
+4. Review feature description
+5. Click "Enable"
+
+**Enable via Azure CLI:**
+
+```bash
+# Enable vector search capability on account
+az cosmosdb update \
+    --resource-group <resource-group-name> \
+    --name <account-name> \
+    --capabilities EnableNoSQLVectorSearch
+```
+
+**Verify Feature is Enabled (before creating containers):**
+
+Wait 15 minutes after enabling, then verify:
+
+```bash
+# Check account capabilities
+az cosmosdb show \
+    --resource-group <resource-group-name> \
+    --name <account-name> \
+    --query "capabilities[?name=='EnableNoSQLVectorSearch']"
+```
+
+**Incorrect (attempting to use vectors without enabling feature):**
+
+```csharp
+// .NET - This will FAIL if feature not enabled
+var embeddings = new List<Embedding>() { /* ... */ };
+var properties = new ContainerProperties("docs", "/id")
+{
+    VectorEmbeddingPolicy = new(new Collection<Embedding>(embeddings))
+};
+
+await database.CreateContainerAsync(properties);
+// Error: Vector search feature not enabled on account
+```
+
+**Correct (enable feature first, wait, then create):**
+
+```bash
+# Step 1: Enable feature
+az cosmosdb update \
+    --resource-group myResourceGroup \
+    --name myCosmosAccount \
+    --capabilities EnableNoSQLVectorSearch
+
+# Step 2: Wait 15 minutes for feature to activate
+
+# Step 3: Verify enabled
+az cosmosdb show \
+    --resource-group myResourceGroup \
+    --name myCosmosAccount \
+    --query "capabilities"
+
+# Step 4: Now create containers with vector policies (see other rules)
+```
+
+**SDK Version Requirements:**
+- **.NET**: SDK 3.45.0+ (release) or 3.46.0-preview.0+ (preview)
+- **Python**: Latest Python SDK
+- **JavaScript**: SDK 4.1.0+
+- **Java**: Latest Java SDK v4
+
+Reference: [.NET](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-dotnet-vector-index-query#enable-the-feature) | [Python](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-python-vector-index-query#enable-the-feature) | [JavaScript](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-javascript-vector-index-query#enable-the-feature) | [Java](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-java-vector-index-query#enable-the-feature)
+
+### 11.4 Configure Vector Indexes in Indexing Policy
+
+**Impact: CRITICAL** (Required for vector search performance)
+
+## Configure Vector Indexes in Indexing Policy
+
+**Impact: CRITICAL (Required for vector search performance)**
+
+Vector indexes must be added to the indexing policy to enable efficient vector similarity search. Choose between QuantizedFlat (faster builds, good for smaller datasets) or DiskANN (better for larger datasets, requires more memory).
+
+**Vector Index Types:**
+- `QuantizedFlat`: Quantized flat index - faster to build, good for datasets < 50K vectors
+- `DiskANN`: Disk-based approximate nearest neighbor - better for larger datasets, optimized for scale
+
+**CRITICAL: Exclude vector paths from regular indexing** to avoid high RU charges and latency on inserts.
+
+**Incorrect (no vector indexes or missing excludedPaths):**
+
+```csharp
+// .NET - Missing vector indexes
+var properties = new ContainerProperties("documents", "/category")
+{
+    VectorEmbeddingPolicy = new(embeddings)
+};
+// No VectorIndexes configured!
+```
+
+```python
+# Python - Missing excluded paths for vectors
+indexing_policy = { 
+    "includedPaths": [{"path": "/*"}],
+    "vectorIndexes": [
+        {"path": "/embedding", "type": "quantizedFlat"}
+    ]
+    # Missing excludedPaths - will cause high RU consumption!
+}
+```
+
+**Correct (with vector indexes and excluded paths):**
+
+```csharp
+// .NET - SDK 3.45.0+
+ContainerProperties properties = new ContainerProperties(
+    id: "documents", 
+    partitionKeyPath: "/category")
+{   
+    VectorEmbeddingPolicy = new(collection),
+    IndexingPolicy = new IndexingPolicy()
+    {
+        VectorIndexes = new()
+        {
+            new VectorIndexPath()
+            {
+                Path = "/embedding",
+                Type = VectorIndexType.QuantizedFlat,
+            }
+        }
+    },
+};
+
+// CRITICAL: Exclude vector paths from regular indexing
+properties.IndexingPolicy.IncludedPaths.Add(new IncludedPath { Path = "/*" });
+properties.IndexingPolicy.ExcludedPaths.Add(new ExcludedPath { Path = "/embedding/*" });
+```
+
+```python
+# Python
+indexing_policy = { 
+    "includedPaths": [{"path": "/*"}], 
+    "excludedPaths": [
+        {"path": "/\"_etag\"/?"},
+        {"path": "/embedding/*"}  # CRITICAL: Exclude vector path
+    ], 
+    "vectorIndexes": [
+        {
+            "path": "/embedding", 
+            "type": "quantizedFlat"  # or "diskANN" for larger datasets
+        }
+    ] 
+}
+
+container = db.create_container_if_not_exists( 
+    id="documents", 
+    partition_key=PartitionKey(path='/category'), 
+    indexing_policy=indexing_policy, 
+    vector_embedding_policy=vector_embedding_policy
+)
+```
+
+```javascript
+// JavaScript - SDK 4.1.0+
+const indexingPolicy = {
+  vectorIndexes: [
+    { path: "/embedding", type: VectorIndexType.QuantizedFlat }
+  ],
+  includedPaths: [{ path: "/*" }],
+  excludedPaths: [
+    { path: "/embedding/*" }  // CRITICAL: Exclude vector path
+  ]
+};
+
+const { resource: containerdef } = await database.containers.createIfNotExists({
+  id: "documents",
+  partitionKey: { paths: ["/category"] },
+  vectorEmbeddingPolicy: vectorEmbeddingPolicy,
+  indexingPolicy: indexingPolicy
+});
+```
+
+```java
+// Java
+IndexingPolicy indexingPolicy = new IndexingPolicy();
+indexingPolicy.setIndexingMode(IndexingMode.CONSISTENT);
+
+// CRITICAL: Exclude vector path
+ExcludedPath excludedPath = new ExcludedPath("/embedding/*");
+indexingPolicy.setExcludedPaths(Collections.singletonList(excludedPath));
+
+IncludedPath includedPath = new IncludedPath("/*");
+indexingPolicy.setIncludedPaths(Collections.singletonList(includedPath));
+
+// Vector index configuration
+CosmosVectorIndexSpec vectorIndexSpec = new CosmosVectorIndexSpec();
+vectorIndexSpec.setPath("/embedding");
+vectorIndexSpec.setType(CosmosVectorIndexType.QUANTIZED_FLAT.toString());
+
+indexingPolicy.setVectorIndexes(Collections.singletonList(vectorIndexSpec));
+
+containerProperties.setIndexingPolicy(indexingPolicy);
+database.createContainer(containerProperties).block();
+```
+
+**Index Type Selection Guide:**
+- Use `QuantizedFlat` for: < 50K vectors, faster builds, lower memory
+- Use `DiskANN` for: > 50K vectors, better recall, production workloads
+
+Reference: [.NET](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-dotnet-vector-index-query#create-a-vector-index-in-the-indexing-policy) | [Python](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-python-vector-index-query#create-a-vector-index-in-the-indexing-policy) | [JavaScript](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-javascript-vector-index-query#create-a-vector-index-in-the-indexing-policy) | [Java](https://learn.microsoft.com/en-us/azure/cosmos-db/how-to-java-vector-index-query#create-a-vector-index-in-the-indexing-policy)
+
+### 11.5 Normalize Embeddings for Cosine Similarity
+
+**Impact: MEDIUM** (Ensures accurate similarity scores and consistent test results)
+
+## Normalize Embeddings for Cosine Similarity
+
+**Impact: MEDIUM (Accurate similarity scores)**
+
+When using cosine distance (the most common choice for vector search), normalize embeddings to unit length (L2 norm = 1). This ensures consistent similarity scores and enables accurate testing with mock embeddings.
+
+**Why Normalize:**
+- Cosine similarity measures the angle between vectors, not magnitude
+- Unnormalized embeddings can produce inconsistent scores
+- Most embedding models (Azure OpenAI, etc.) return normalized vectors
+- Essential for generating mock embeddings for testing
+
+**Formula:**
+```
+normalized_vector = vector / ||vector||₂
+where ||vector||₂ = sqrt(sum(x² for x in vector))
+```
+
+**Incorrect (unnormalized embeddings):**
+
+```python
+# Python - BAD: Random vectors without normalization
+import random
+
+def generate_mock_embedding(dimensions=1536):
+    # Returns unnormalized random vector
+    return [random.uniform(-1, 1) for _ in range(dimensions)]
+    # Problem: Magnitude varies, affects cosine similarity scores
+```
+
+```csharp
+// .NET - BAD: Unnormalized test embeddings
+public float[] GenerateMockEmbedding(int dimensions = 1536)
+{
+    var random = new Random();
+    var embedding = new float[dimensions];
+    for (int i = 0; i < dimensions; i++)
+    {
+        embedding[i] = (float)(random.NextDouble() * 2 - 1);
+    }
+    return embedding; // Not normalized - scores will be inconsistent
+}
+```
+
+**Correct (normalized to unit length):**
+
+```python
+# Python - GOOD: Normalized embeddings
+import numpy as np
+
+def generate_mock_embedding(text: str, dimensions: int = 1536) -> list:
+    """
+    Generate normalized mock embedding for testing.
+    Uses text hash as seed for reproducibility.
+    """
+    # Use text hash as seed for deterministic results
+    seed = hash(text) % (2**32)
+    np.random.seed(seed)
+    
+    # Generate random vector
+    vector = np.random.randn(dimensions).astype(np.float32)
+    
+    # Normalize to unit length (critical for cosine similarity)
+    vector = vector / np.linalg.norm(vector)
+    
+    return vector.tolist()
+
+# Verify normalization
+embedding = generate_mock_embedding("test document")
+magnitude = np.linalg.norm(embedding)
+assert abs(magnitude - 1.0) < 1e-6, f"Not normalized: {magnitude}"
+
+# Use in tests
+documents = [
+    {
+        "id": "doc1",
+        "content": "Azure Cosmos DB vector search",
+        "embedding": generate_mock_embedding("Azure Cosmos DB vector search")
+    }
+]
+```
+
+```csharp
+// .NET - GOOD: Normalized embeddings
+using System;
+using System.Linq;
+
+public class EmbeddingHelper
+{
+    public static float[] GenerateMockEmbedding(string text, int dimensions = 1536)
+    {
+        // Use text hash as seed for reproducibility
+        var seed = Math.Abs(text.GetHashCode());
+        var random = new Random(seed);
+        
+        // Generate random vector
+        var vector = new float[dimensions];
+        for (int i = 0; i < dimensions; i++)
+        {
+            // Box-Muller transform for normal distribution
+            double u1 = random.NextDouble();
+            double u2 = random.NextDouble();
+            vector[i] = (float)(Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2));
+        }
+        
+        // Normalize to unit length (L2 norm = 1)
+        var magnitude = Math.Sqrt(vector.Sum(x => x * x));
+        for (int i = 0; i < dimensions; i++)
+        {
+            vector[i] /= (float)magnitude;
+        }
+        
+        return vector;
+    }
+    
+    public static double CalculateMagnitude(float[] vector)
+    {
+        return Math.Sqrt(vector.Sum(x => x * x));
+    }
+}
+
+// Usage
+var embedding = EmbeddingHelper.GenerateMockEmbedding("test document");
+var magnitude = EmbeddingHelper.CalculateMagnitude(embedding);
+Console.WriteLine($"Magnitude: {magnitude}"); // Should be ~1.0
+
+var document = new Document
+{
+    Id = "doc1",
+    Content = "Azure Cosmos DB",
+    Embedding = embedding
+};
+```
+
+```javascript
+// JavaScript - GOOD: Normalized embeddings
+function generateMockEmbedding(text, dimensions = 1536) {
+    // Simple hash for seed
+    let seed = 0;
+    for (let i = 0; i < text.length; i++) {
+        seed = ((seed << 5) - seed) + text.charCodeAt(i);
+        seed = seed & seed; // Convert to 32-bit integer
+    }
+    
+    // Seeded random number generator
+    const random = (function(seed) {
+        let state = seed;
+        return function() {
+            state = (state * 1103515245 + 12345) & 0x7fffffff;
+            return state / 0x7fffffff;
+        };
+    })(Math.abs(seed));
+    
+    // Generate random vector with normal distribution (Box-Muller)
+    const vector = [];
+    for (let i = 0; i < dimensions; i++) {
+        const u1 = random();
+        const u2 = random();
+        const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        vector.push(z);
+    }
+    
+    // Normalize to unit length
+    const magnitude = Math.sqrt(vector.reduce((sum, x) => sum + x * x, 0));
+    return vector.map(x => x / magnitude);
+}
+
+// Verify
+const embedding = generateMockEmbedding("test document");
+const magnitude = Math.sqrt(embedding.reduce((sum, x) => sum + x * x, 0));
+console.log(`Magnitude: ${magnitude}`); // Should be ~1.0
+
+const document = {
+    id: "doc1",
+    content: "Azure Cosmos DB",
+    embedding: embedding
+};
+```
+
+```java
+// Java - GOOD: Normalized embeddings
+import java.util.Random;
+
+public class EmbeddingHelper {
+    public static float[] generateMockEmbedding(String text, int dimensions) {
+        // Use text hash as seed for reproducibility
+        int seed = Math.abs(text.hashCode());
+        Random random = new Random(seed);
+        
+        // Generate random vector with normal distribution
+        float[] vector = new float[dimensions];
+        for (int i = 0; i < dimensions; i++) {
+            vector[i] = (float) random.nextGaussian();
+        }
+        
+        // Normalize to unit length
+        double magnitude = 0.0;
+        for (float v : vector) {
+            magnitude += v * v;
+        }
+        magnitude = Math.sqrt(magnitude);
+        
+        for (int i = 0; i < dimensions; i++) {
+            vector[i] /= magnitude;
+        }
+        
+        return vector;
+    }
+    
+    public static double calculateMagnitude(float[] vector) {
+        double sum = 0.0;
+        for (float v : vector) {
+            sum += v * v;
+        }
+        return Math.sqrt(sum);
+    }
+}
+
+// Usage
+float[] embedding = EmbeddingHelper.generateMockEmbedding("test document", 1536);
+double magnitude = EmbeddingHelper.calculateMagnitude(embedding);
+System.out.println("Magnitude: " + magnitude); // Should be ~1.0
+```
+
+**Production Embeddings:**
+
+Most embedding APIs return normalized vectors automatically, but verify:
+
+```python
+# Azure OpenAI - typically normalized
+from openai import AzureOpenAI
+
+client = AzureOpenAI(...)
+response = client.embeddings.create(
+    input="search query",
+    model="text-embedding-ada-002"
+)
+embedding = response.data[0].embedding
+
+# Verify normalization (optional, for debugging)
+import numpy as np
+magnitude = np.linalg.norm(embedding)
+print(f"Magnitude: {magnitude}")  # Should be ~1.0
+
+# If not normalized (rare), normalize:
+if abs(magnitude - 1.0) > 0.01:
+    embedding = (np.array(embedding) / magnitude).tolist()
+```
+
+**Testing Best Practices:**
+
+1. **Deterministic Mock Embeddings** - Use text/content hash as random seed
+   ```python
+   seed = hash(text) % (2**32)  # Reproducible results
+   ```
+
+2. **Verify Normalization** - Assert magnitude is ~1.0 in tests
+   ```python
+   assert abs(np.linalg.norm(embedding) - 1.0) < 1e-6
+   ```
+
+3. **Realistic Dimensions** - Use actual dimensions (1536 for Ada-002, 3072 for text-embedding-3-large)
+
+4. **Similarity Score Ranges** - With normalized vectors and cosine distance:
+   - Identical vectors: score = 1.0
+   - Orthogonal vectors: score = 0.0
+   - Opposite vectors: score = -1.0 (rare in embeddings)
+
+**When NOT to Normalize:**
+
+- If using **Euclidean** or **Dot Product** distance functions (check your embedding policy)
+- When magnitude carries semantic meaning (very rare)
+- If embedding model explicitly states vectors are not normalized
+
+**Common Mistake:**
+
+```python
+# BAD: Comparing normalized query to unnormalized documents
+query_embedding = normalize(get_embedding(query))  # Normalized
+documents = [
+    {"embedding": [random.random() for _ in range(1536)]}  # NOT normalized
+]
+# Results: Inconsistent similarity scores
+```
+
+**Related Rules:**
+- vector-embedding-policy.md - Choose cosine distance function
+- vector-distance-query.md - VectorDistance() queries return similarity scores
+
+### 11.6 Implement Repository Pattern for Vector Search
+
+**Impact: HIGH** (Provides clean abstraction for vector operations and data access)
+
+## Implement Repository Pattern for Vector Search
+
+**Impact: HIGH (Clean abstraction for vector operations)**
+
+When implementing vector search, use a repository pattern to encapsulate Cosmos DB operations. This separates data access logic from business logic and makes vector search operations testable and maintainable.
+
+**Key Methods to Implement:**
+1. **insert_document/upsert_document** - Store documents with embeddings
+2. **vector_search** - Perform similarity search with VectorDistance()
+3. **get_document** - Point read by ID and partition key
+4. **delete_document** - Remove documents
+
+**Incorrect (direct container access in application code):**
+
+```python
+# Python - BAD: Direct container access scattered throughout app
+@app.post("/api/search")
+async def search(request: SearchRequest):
+    # Vector search logic mixed with API logic
+    query = f"""
+        SELECT TOP {request.limit} c.title, 
+               VectorDistance(c.embedding, @embedding) AS score
+        FROM c ORDER BY VectorDistance(c.embedding, @embedding)
+    """
+    results = container.query_items(query, parameters=[...])
+    # No abstraction, hard to test, tightly coupled
+```
+
+```csharp
+// .NET - BAD: No separation of concerns
+public class DocumentService {
+    public async Task<List<Doc>> Search(float[] embedding) {
+        // Direct container access, no abstraction
+        var query = new QueryDefinition(...);
+        var iterator = _container.GetItemQueryIterator<Doc>(query);
+        // Mixing infrastructure concerns with business logic
+    }
+}
+```
+
+**Correct (repository pattern with clean abstraction):**
+
+```python
+# Python - GOOD: Repository pattern
+class DocumentRepository:
+    """Repository for documents with vector search capabilities"""
+    
+    def __init__(self, container: ContainerProxy):
+        self.container = container
+    
+    async def insert_document(self, document: DocumentChunk) -> DocumentChunk:
+        """Insert document with vector embedding."""
+        try:
+            doc_dict = document.dict()
+            created_item = self.container.upsert_item(body=doc_dict)
+            return DocumentChunk(**created_item)
+        except CosmosHttpResponseError as e:
+            logger.error(f"Failed to insert document: {e.message}")
+            raise
+    
+    async def vector_search(
+        self,
+        query_embedding: List[float],
+        limit: int = 5,
+        similarity_threshold: float = 0.0,
+        category_filter: Optional[str] = None
+    ) -> List[DocumentChunk]:
+        """Perform vector similarity search with VectorDistance()."""
+        try:
+            # Build parameterized query
+            query = """
+                SELECT TOP @limit 
+                    c.id, c.title, c.content, c.category, c.metadata,
+                    VectorDistance(c.embedding, @queryVector) AS similarityScore
+                FROM c
+                WHERE VectorDistance(c.embedding, @queryVector) > @threshold
+            """
+            
+            # Add optional filters
+            if category_filter:
+                query += " AND c.category = @category"
+            
+            query += " ORDER BY VectorDistance(c.embedding, @queryVector)"
+            
+            # Build parameters
+            parameters = [
+                {"name": "@queryVector", "value": query_embedding},
+                {"name": "@limit", "value": limit},
+                {"name": "@threshold", "value": similarity_threshold}
+            ]
+            
+            if category_filter:
+                parameters.append({"name": "@category", "value": category_filter})
+            
+            # Execute query
+            items = list(self.container.query_items(
+                query=query,
+                parameters=parameters,
+                enable_cross_partition_query=True,
+                populate_query_metrics=True
+            ))
+            
+            # Convert to domain models
+            results = []
+            for item in items:
+                score = item.pop('similarityScore', 0.0)
+                if 'metadata' not in item:
+                    item['metadata'] = {}
+                item['metadata']['similarityScore'] = score
+                item['embedding'] = []  # Exclude from response for performance
+                results.append(DocumentChunk(**item))
+            
+            return results
+            
+        except CosmosHttpResponseError as e:
+            logger.error(f"Vector search failed: {e.message}")
+            raise
+    
+    async def get_document(self, document_id: str, category: str) -> Optional[DocumentChunk]:
+        """Point read with partition key."""
+        try:
+            item = self.container.read_item(
+                item=document_id,
+                partition_key=category
+            )
+            return DocumentChunk(**item)
+        except CosmosHttpResponseError as e:
+            if e.status_code == 404:
+                return None
+            raise
+
+# Usage in application
+@app.post("/api/search")
+async def search(request: SearchRequest):
+    results = await document_repo.vector_search(
+        query_embedding=request.embedding,
+        limit=request.top_k,
+        category_filter=request.category
+    )
+    return {"results": results}
+```
+
+```csharp
+// .NET - GOOD: Repository pattern
+public interface IDocumentRepository
+{
+    Task<DocumentChunk> InsertDocumentAsync(DocumentChunk document);
+    Task<List<DocumentChunk>> VectorSearchAsync(
+        float[] queryEmbedding, 
+        int limit = 5, 
+        double similarityThreshold = 0.0, 
+        string? categoryFilter = null);
+    Task<DocumentChunk?> GetDocumentAsync(string id, string category);
+}
+
+public class DocumentRepository : IDocumentRepository
+{
+    private readonly Container _container;
+    private readonly ILogger<DocumentRepository> _logger;
+
+    public DocumentRepository(Container container, ILogger<DocumentRepository> logger)
+    {
+        _container = container;
+        _logger = logger;
+    }
+
+    public async Task<DocumentChunk> InsertDocumentAsync(DocumentChunk document)
+    {
+        try
+        {
+            var response = await _container.UpsertItemAsync(
+                item: document,
+                partitionKey: new PartitionKey(document.Category)
+            );
+            _logger.LogInformation("Inserted document {Id}", document.Id);
+            return response.Resource;
+        }
+        catch (CosmosException ex)
+        {
+            _logger.LogError(ex, "Failed to insert document {Id}", document.Id);
+            throw;
+        }
+    }
+
+    public async Task<List<DocumentChunk>> VectorSearchAsync(
+        float[] queryEmbedding, 
+        int limit = 5,
+        double similarityThreshold = 0.0, 
+        string? categoryFilter = null)
+    {
+        try
+        {
+            // Build query
+            var queryText = @"
+                SELECT TOP @limit 
+                    c.id, c.title, c.content, c.category, c.metadata,
+                    VectorDistance(c.embedding, @queryVector) AS similarityScore
+                FROM c
+                WHERE VectorDistance(c.embedding, @queryVector) > @threshold";
+
+            if (!string.IsNullOrEmpty(categoryFilter))
+            {
+                queryText += " AND c.category = @category";
+            }
+
+            queryText += " ORDER BY VectorDistance(c.embedding, @queryVector)";
+
+            // Build query definition
+            var queryDef = new QueryDefinition(queryText)
+                .WithParameter("@queryVector", queryEmbedding)
+                .WithParameter("@limit", limit)
+                .WithParameter("@threshold", similarityThreshold);
+
+            if (!string.IsNullOrEmpty(categoryFilter))
+            {
+                queryDef = queryDef.WithParameter("@category", categoryFilter);
+            }
+
+            // Execute query
+            var results = new List<DocumentChunk>();
+            using var iterator = _container.GetItemQueryIterator<DocumentChunk>(queryDef);
+
+            while (iterator.HasMoreResults)
+            {
+                var response = await iterator.ReadNextAsync();
+                results.AddRange(response);
+                
+                // Log RU consumption
+                _logger.LogDebug("Vector search consumed {RU} RUs", 
+                    response.RequestCharge);
+            }
+
+            return results;
+        }
+        catch (CosmosException ex)
+        {
+            _logger.LogError(ex, "Vector search failed");
+            throw;
+        }
+    }
+
+    public async Task<DocumentChunk?> GetDocumentAsync(string id, string category)
+    {
+        try
+        {
+            var response = await _container.ReadItemAsync<DocumentChunk>(
+                id: id,
+                partitionKey: new PartitionKey(category)
+            );
+            return response.Resource;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+}
+
+// Usage in service/controller
+public class SearchService
+{
+    private readonly IDocumentRepository _repository;
+
+    public SearchService(IDocumentRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public async Task<List<DocumentChunk>> SearchAsync(SearchRequest request)
+    {
+        return await _repository.VectorSearchAsync(
+            queryEmbedding: request.Embedding,
+            limit: request.TopK,
+            categoryFilter: request.Category
+        );
+    }
+}
+```
+
+```javascript
+// JavaScript/TypeScript - GOOD: Repository pattern
+class DocumentRepository {
+    constructor(private container: Container) {}
+
+    async insertDocument(document: DocumentChunk): Promise<DocumentChunk> {
+        try {
+            const { resource } = await this.container.items.upsert(document);
+            console.log(`Inserted document ${resource.id}`);
+            return resource;
+        } catch (error) {
+            console.error('Failed to insert document:', error);
+            throw error;
+        }
+    }
+
+    async vectorSearch(
+        queryEmbedding: number[],
+        options: {
+            limit?: number;
+            similarityThreshold?: number;
+            categoryFilter?: string;
+        } = {}
+    ): Promise<DocumentChunk[]> {
+        const { limit = 5, similarityThreshold = 0.0, categoryFilter } = options;
+
+        try {
+            let query = `
+                SELECT TOP @limit 
+                    c.id, c.title, c.content, c.category, c.metadata,
+                    VectorDistance(c.embedding, @queryVector) AS similarityScore
+                FROM c
+                WHERE VectorDistance(c.embedding, @queryVector) > @threshold
+            `;
+
+            const parameters = [
+                { name: '@queryVector', value: queryEmbedding },
+                { name: '@limit', value: limit },
+                { name: '@threshold', value: similarityThreshold }
+            ];
+
+            if (categoryFilter) {
+                query += ' AND c.category = @category';
+                parameters.push({ name: '@category', value: categoryFilter });
+            }
+
+            query += ' ORDER BY VectorDistance(c.embedding, @queryVector)';
+
+            const { resources } = await this.container.items
+                .query({
+                    query,
+                    parameters
+                })
+                .fetchAll();
+
+            return resources.map(item => ({
+                ...item,
+                embedding: [] // Exclude for performance
+            }));
+        } catch (error) {
+            console.error('Vector search failed:', error);
+            throw error;
+        }
+    }
+
+    async getDocument(id: string, category: string): Promise<DocumentChunk | null> {
+        try {
+            const { resource } = await this.container.item(id, category).read();
+            return resource;
+        } catch (error: any) {
+            if (error.code === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+}
+
+// Usage
+const documentRepo = new DocumentRepository(container);
+const results = await documentRepo.vectorSearch(embedding, { 
+    limit: 10, 
+    categoryFilter: 'ai' 
+});
+```
+
+**Benefits:**
+- ✅ Testable - Mock repository in unit tests
+- ✅ Maintainable - Vector search logic in one place
+- ✅ Reusable - Use repository across multiple services
+- ✅ Clean separation - Infrastructure vs business logic
+- ✅ Easier to optimize - Centralized query performance tuning
+
+**Best Practices:**
+1. Use `upsert_item` for idempotent inserts
+2. Always parameterize queries (never concatenate embeddings)
+3. Include `ORDER BY VectorDistance()` for ranked results
+4. Exclude embeddings from SELECT when not needed (performance)
+5. Log RU consumption for monitoring
+6. Handle 404 errors gracefully (return null, not exception)
+7. Use domain models (not raw dictionaries/dynamic)
+
+**Related Rules:**
+- vector-distance-query.md - VectorDistance() usage
+- query-parameterize.md - Always use parameters
+- query-use-projections.md - Exclude unnecessary fields
 
 ---
 
